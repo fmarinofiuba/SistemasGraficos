@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Variables</title>
+        <link rel="stylesheet" href="css/styles.css" />
+    </head>
+    <body>
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            // Definición de variables usando var
+            var variable1 = 'Hola';
+            var variable2 = 5;
+
+            // Definición de variables usando let (introducida en ES6)
+            let variable3 = true;
+
+            // Definición de variables usando const (introducida en ES6)
+            const PI = 3.1416;
+
+            // Impresión de las variables en la consola
+            console.log('Variable 1:', variable1);
+            console.log('Variable 2:', variable2);
+            console.log('Variable 3:', variable3);
+            console.log('Valor de PI:', PI);
+
+            // Cambio de valor de una variable let
+            variable3 = false;
+            console.log('Nuevo valor de Variable 3:', variable3);
+
+            // Intento de cambiar el valor de una variable const (esto dará un error)
+            // PI = 3.14; // Esto dará un error
+        </script>
+    </body>
+</html>

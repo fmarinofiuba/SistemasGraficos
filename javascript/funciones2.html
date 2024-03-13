@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Funciones constructoras</title>
+    </head>
+    <body>
+        <h4>Funciones constructoras</h4>
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            function Auto(marca, modelo, color) {
+                // Atributos públicos
+                this.marca = marca;
+                this.modelo = modelo;
+                this.color = color;
+
+                // Atributos privados
+                var velocidad = 0; // velocidad actual en km/h
+                var estadoMotor = false; // estado del motor
+
+                // Métodos públicos
+                this.arrancar = function () {
+                    estadoMotor = true;
+                    console.log('El motor está arrancado.');
+                };
+
+                this.detener = function () {
+                    estadoMotor = false;
+                    velocidad = 0;
+                    console.log('El motor está detenido.');
+                };
+
+                this.acelerar = function (incremento) {
+                    if (estadoMotor) {
+                        velocidad += incremento;
+                        console.log('Acelerando. Velocidad actual: ' + velocidad + ' km/h');
+                    } else {
+                        console.log('El motor no está arrancado. No se puede acelerar.');
+                    }
+                };
+
+                // Método privado
+                function verificarVelocidad() {
+                    if (velocidad > 120) {
+                        console.log('Advertencia: Excediendo la velocidad máxima.');
+                    }
+                }
+            }
+
+            // Uso de la función constructora para crear un objeto Auto
+            var miAuto = new Auto('Toyota', 'Corolla', 'Azul');
+
+            // Accediendo a atributos públicos
+            console.log('Marca:', miAuto.marca);
+            console.log('Modelo:', miAuto.modelo);
+            console.log('Color:', miAuto.color);
+
+            // Llamando a métodos públicos
+            miAuto.arrancar();
+            miAuto.acelerar(60);
+            miAuto.acelerar(70);
+            miAuto.detener();
+
+            // No podemos acceder a los atributos privados ni a los métodos privados desde fuera de la función constructora
+            // console.log(miAuto.estadoMotor); // Esto dará un error
+            // verificarVelocidad(); // Esto dará un error
+        </script>
+    </body>
+</html>

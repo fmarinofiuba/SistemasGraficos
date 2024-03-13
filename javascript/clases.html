@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Clases</title>
+    </head>
+    <body>
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            class Auto {
+                // Constructor
+                constructor(marca, modelo, color) {
+                    // Atributos públicos
+                    this.marca = marca;
+                    this.modelo = modelo;
+                    this.color = color;
+
+                    // Atributos privados (simulados usando convención de nombres)
+                    this._velocidad = 0; // velocidad actual en km/h
+                    this._estadoMotor = false; // estado del motor
+                }
+
+                // Métodos públicos
+                arrancar() {
+                    this._estadoMotor = true;
+                    console.log('El motor está arrancado.');
+                }
+
+                detener() {
+                    this._estadoMotor = false;
+                    this._velocidad = 0;
+                    console.log('El motor está detenido.');
+                }
+
+                acelerar(incremento) {
+                    if (this._estadoMotor) {
+                        this._velocidad += incremento;
+                        console.log('Acelerando. Velocidad actual: ' + this._velocidad + ' km/h');
+                    } else {
+                        console.log('El motor no está arrancado. No se puede acelerar.');
+                    }
+                }
+
+                // Método privado (simulado)
+                #verificarVelocidad() {
+                    if (this._velocidad > 120) {
+                        console.log('Advertencia: Excediendo la velocidad máxima.');
+                    }
+                }
+            }
+
+            // Uso de la clase para crear un objeto Auto
+            var miAuto = new Auto('Toyota', 'Corolla', 'Azul');
+
+            // Accediendo a atributos públicos
+            console.log('Marca:', miAuto.marca);
+            console.log('Modelo:', miAuto.modelo);
+            console.log('Color:', miAuto.color);
+
+            // Llamando a métodos públicos
+            miAuto.arrancar();
+            miAuto.acelerar(60);
+            miAuto.acelerar(70);
+            miAuto.detener();
+
+            // No podemos acceder a los atributos privados ni a los métodos privados desde fuera de la clase
+            // console.log(miAuto._estadoMotor); // Esto dará un error
+            // miAuto.#verificarVelocidad(); // Esto dará un error
+        </script>
+    </body>
+</html>

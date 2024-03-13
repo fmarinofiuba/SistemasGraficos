@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Variables Let vs Var</title>
+        <link rel="stylesheet" href="css/styles.css" />
+    </head>
+    <body>
+        <h3>Ejemplo Let vs Var</h3>
+        <p>
+            La diferencia principal entre let y var en JavaScript radica en el ámbito de las variables y su
+            comportamiento de "hoisting".
+        </p>
+
+        <h4>Ámbito (scope):</h4>
+
+        <ul>
+            <li>
+                <b>var</b> tiene un ámbito de función o global. Esto significa que una variable definida con var estará
+                disponible dentro de la función en la que se declara o será global si se declara fuera de cualquier
+                función.
+            </li>
+            <li>
+                <b>let</b> tiene un ámbito de bloque (bloque {}). Esto significa que una variable definida con let
+                estará disponible solo dentro del bloque en el que se declara.
+            </li>
+        </ul>
+
+        <h4>Hoisting</h4>
+
+        <ul>
+            <li>
+                Las variables declaradas con <b>var</b> son "elevadas" o "hoisted" al comienzo de su ámbito (ya sea la
+                función o el ámbito global). Esto significa que puedes usar una variable var antes de su declaración,
+                pero su valor será undefined hasta que se le asigne un valor.
+            </li>
+            <li>
+                Las variables declaradas con <b>let</b> no son hoisted en el mismo sentido. Se "elevan" solo hasta el
+                principio de su bloque de código, pero no se inicializan. Intentar acceder a una variable let antes de
+                su declaración resultará en un error de referencia (ReferenceError). Por lo tanto, let es preferible a
+                var en la mayoría de los casos, ya que proporciona un ámbito de bloque más seguro y evita problemas
+                asociados con el hoisting que pueden llevar a comportamientos inesperados en el código.
+            </li>
+        </ul>
+
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            // Ejemplo con var
+            function ejemploVar() {
+                if (true) {
+                    var x = 10;
+                }
+                console.log('Dentro de la función (var):', x); // x está disponible aquí debido al hoisting de var
+            }
+
+            ejemploVar(); // Resultado: 10
+            console.log('Fuera de la función (var):', x); // x está disponible aquí también, es una variable global
+            // Resultado: 10
+
+            // Ejemplo con let
+            function ejemploLet() {
+                if (true) {
+                    let y = 20;
+                }
+                // console.log("Dentro de la función (let):", y); // Esto dará un error porque y está fuera del alcance (scope)
+            }
+
+            ejemploLet(); // No imprime nada debido a un error
+            //console.log("Fuera de la función (let):", y); // Esto dará un error porque y está fuera del alcance (scope)
+        </script>
+    </body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Funciones</title>
+    </head>
+    <body>
+        <h4>Funciones</h4>
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            // Función regular
+            function saludar(nombre) {
+                console.log('¡Hola, ' + nombre + '!');
+            }
+
+            saludar('Juan'); // Resultado: ¡Hola, Juan!
+
+            // Función anónima asignada a una variable
+            var sumar = function (a, b) {
+                return a + b;
+            };
+
+            console.log('La suma es:', sumar(5, 3)); // Resultado: La suma es: 8
+
+            // Función flecha (introducida en ES6)
+            var restar = (a, b) => {
+                return a - b;
+            };
+
+            console.log('La resta es:', restar(10, 4)); // Resultado: La resta es: 6
+
+            // Función constructora
+            function Persona(nombre, edad) {
+                this.nombre = nombre;
+                this.edad = edad;
+            }
+
+            // Crear objetos utilizando la función constructora
+            var persona1 = new Persona('Ana', 25);
+            var persona2 = new Persona('Carlos', 30);
+
+            console.log('Persona 1:', persona1); // Resultado: Persona 1: { nombre: 'Ana', edad: 25 }
+            console.log('Persona 2:', persona2); // Resultado: Persona 2: { nombre: 'Carlos', edad: 30 }
+        </script>
+    </body>
+</html>
