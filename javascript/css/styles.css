@@ -2,3 +2,10 @@
 body {
     font-family: Arial, sans-serif;
 }
+
+
+.codeText{
+    background-color: #DDDDDD;
+    padding: 10px;
+    font-family: consolas;
+}

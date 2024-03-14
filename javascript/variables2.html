@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta charset="UTF-8" />
         <title>Variables Let vs Var</title>
         <link rel="stylesheet" href="css/styles.css" />
     </head>
     <body>
-        <h3>Ejemplo Let vs Var</h3>
+        <h4>Variables 2</h4>
+        <h5>Ejemplo Let vs Var</h5>
         <p>
             La diferencia principal entre let y var en JavaScript radica en el ámbito de las variables y su
             comportamiento de "hoisting".
@@ -43,7 +45,7 @@
         </ul>
 
         <p>Abrir la consola para ver la salida del programa</p>
-        <script>
+        <script id="code">
             // Ejemplo con var
             function ejemploVar() {
                 if (true) {
@@ -67,5 +69,6 @@
             ejemploLet(); // No imprime nada debido a un error
             //console.log("Fuera de la función (let):", y); // Esto dará un error porque y está fuera del alcance (scope)
         </script>
+        <script type="module" src="utils.js"></script>
     </body>
 </html>
