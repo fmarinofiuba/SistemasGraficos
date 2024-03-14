@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Object</title>
+    </head>
+    <body>
+        <h4>Object</h4>
+        <p>Abrir la consola para ver la salida del programa</p>
+        <script>
+            // Definimos un objeto llamado "persona" con diferentes propiedades y métodos
+            let persona = {
+                nombre: 'Juan',
+                apellido: 'Pérez',
+                edad: 30,
+                saludar: function () {
+                    console.log('¡Hola! Mi nombre es ' + this.nombre + ' ' + this.apellido + '.');
+                },
+            };
+
+            // Accediendo a las propiedades del objeto
+            console.log(persona.nombre); // salida: Juan
+            console.log(persona['apellido']); // salida: Pérez
+
+            // Modificando una propiedad del objeto
+            persona.edad = 35;
+
+            // Agregando una nueva propiedad al objeto
+            persona.profesion = 'Ingeniero';
+
+            // Eliminando una propiedad del objeto
+            delete persona.edad;
+
+            // Llamando al método del objeto
+            persona.saludar(); // salida: ¡Hola! Mi nombre es Juan Pérez.
+
+            // Iterando sobre las propiedades del objeto
+            for (let propiedad in persona) {
+                console.log(propiedad + ': ' + persona[propiedad]);
+            }
+
+            /* 
+            Salida esperada:
+            nombre: Juan
+            apellido: Pérez
+            profesion: Ingeniero
+            saludar: function() {
+                console.log("¡Hola! Mi nombre es " + this.nombre + " " + this.apellido + ".");
+            }
+            */
+
+            // Creando un objeto utilizando el constructor Object
+            let persona2 = new Object();
+            persona2.nombre = 'María';
+            persona2.apellido = 'Gómez';
+
+            // Concatenando objetos
+            let personaCompleta = Object.assign({}, persona, persona2);
+            console.log(personaCompleta);
+
+            /*
+            Salida esperada:
+            {
+            nombre: "María",
+            apellido: "Gómez",
+            profesion: "Ingeniero",
+            saludar: function() {
+                console.log("¡Hola! Mi nombre es " + this.nombre + " " + this.apellido + ".");
+            }
+            }
+            */
+        </script>
+    </body>
+</html>
