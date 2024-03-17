@@ -3,19 +3,21 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
 let scene, camera, renderer, container, font, text;
 
 function setupThreeJs() {
 	container = document.getElementById('container3D');
 
 	renderer = new THREE.WebGLRenderer();
-	renderer.setClearColor(0x333333);
+	renderer.setClearColor(0x777777);
 	scene = new THREE.Scene();
 
 	container.appendChild(renderer.domElement);
 
 	camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
-	camera.position.set(0, 2, 4);
+	camera.position.set(0, 3, 6);
 	camera.lookAt(0, 0, 0);
 
 	const controls = new OrbitControls(camera, renderer.domElement);
@@ -59,7 +61,7 @@ function buildScene() {
 
 		size: 0.6,
 		height: 0.1,
-		curveSegments: 16,
+		curveSegments: 2,
 
 		bevelThickness: 0.1,
 		bevelSize: 0,
@@ -79,13 +81,27 @@ function buildScene() {
 	text.add(axesHelper2);
 	scene.add(text);
 
+	const loader = new GLTFLoader();
+	loader.load('/models/targets.glb', function (gltf) {
+		const targets = gltf.scene;
+		scene.add(targets);
+	});
+
 	// *************************************************************************************
-	//	Modificar código a partir de aquí
+	//	Ejercicio:
+	//	definir la matriz de transformación para cada uno de los 4 modelos en violeta
+	//  y clonar el texto para cada uno de ellos
+	//  Ayuda: las totaciones son multiplos de Math.PI/4 (radianes)
+	//        las escalas son multiplos de 0.25
 	// *************************************************************************************
 
+	let copy1 = text.clone();
 	const matrix = new THREE.Matrix4();
-	matrix.makeTranslation(1, 0, 0);
-	text.matrix.copy(matrix);
+	const m1 = new THREE.Matrix4();
+	const m2 = new THREE.Matrix4();
+
+	copy1.matrix.copy(matrix);
+	//scene.add(copy1);
 
 	// *************************************************************************************
 }
