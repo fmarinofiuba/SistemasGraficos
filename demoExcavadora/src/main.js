@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SceneManager } from './sceneManager.js';
 let scene, camera, renderer, container, sceneManager;
 
+// setup
 function setupThreeJs() {
 	container = document.getElementById('container3D');
 
