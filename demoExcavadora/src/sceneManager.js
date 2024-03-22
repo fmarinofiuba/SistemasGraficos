@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { loadModels } from './loader.js';
+//import { armarSolucion } from './solucion.ignore.js';
 
 const modelPaths = [
 	'/models/antebrazo.dae',
@@ -13,49 +14,133 @@ const modelPaths = [
 	'/models/tuerca.dae',
 ];
 
+const ADD_HELPERS = false;
+
 export class SceneManager {
+	path;
+	vehiculo;
+
+	camaraVehiculo;
+	camaraConductor;
+
+	ready = false;
+
 	constructor(scene) {
 		this.scene = scene;
-		const light = new THREE.DirectionalLight(0xffffff, 1);
+		const light = new THREE.DirectionalLight(0xffffff, 2);
 
 		light.position.set(1, 1, 1);
 		scene.add(light);
 
-		const ambientLight = new THREE.AmbientLight(0x666666);
-		scene.add(ambientLight);
+		const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+		scene.add(hemiLight);
 
-		const grid = new THREE.GridHelper(1000, 10);
+		const grid = new THREE.GridHelper(2000, 20);
 		scene.add(grid);
 
-		const axes = new THREE.AxesHelper(3);
+		const axes = new THREE.AxesHelper(100);
 		scene.add(axes);
+		this.buildPath();
+		this.prepareScene();
 
 		loadModels(modelPaths, (models) => {
 			models.forEach((model, i) => {
-				model.add(new THREE.AxesHelper(20)); // Debugging helpers
+				if (ADD_HELPERS) {
+					model.add(new THREE.AxesHelper(20)); // Debugging helpers
+				}
 				// model.rotation.set(0, 0, 0); // Arreglamos la rotación de los modelos
-				model.position.setX(i * 100 - (models.length * 100) / 2); // Distribuimos las piezas en el eje X para una linda presentación (?)
+				model.position.setZ(i * 100 - (models.length * 100) / 2); // Distribuimos las piezas en el eje X para una linda presentación (?)
+				model.rotation.set(0, 0, 0);
 				scene.add(model);
 			});
 
-			//this.solve();
+			this.cabina = this.scene.getObjectByName('cabina');
+			this.brazo = this.scene.getObjectByName('brazo');
+			this.antebrazo = this.scene.getObjectByName('antebrazo');
+			this.pala = this.scene.getObjectByName('pala');
+			this.chasis = this.scene.getObjectByName('chasis');
+			this.eje = this.scene.getObjectByName('eje');
+			this.llanta = this.scene.getObjectByName('llanta');
+			this.cubierta = this.scene.getObjectByName('cubierta');
+			this.tuerca = this.scene.getObjectByName('tuerca');
+
+			this.eje.geometry.rotateZ(Math.PI / 2);
+			this.eje.geometry.rotateY(Math.PI / 2);
+			this.llanta.geometry.rotateZ(Math.PI / 2);
+			this.llanta.geometry.rotateY(Math.PI / 2);
+			this.cubierta.geometry.rotateZ(Math.PI / 2);
+			this.cubierta.geometry.rotateY(Math.PI / 2);
+
+			this.tuerca.geometry.rotateZ(Math.PI / 2);
+			this.tuerca.geometry.rotateY(Math.PI / 2);
+
+			//this.pala.geometry.rotateY(Math.PI);
+
+			this.camaraConductor.position.set(50, 40, -40);
+
+			this.camaraConductor.lookAt(0, 40, 0);
+			this.cabina.add(this.camaraConductor);
+			this.construirVehiculo();
+			this.ready = true;
 		});
 	}
 
-	solve() {
-		const cabina = this.scene.getObjectByName('cabina');
-		const brazo = this.scene.getObjectByName('brazo');
-		const antebrazo = this.scene.getObjectByName('antebrazo');
-		const pala = this.scene.getObjectByName('pala');
-		const chasis = this.scene.getObjectByName('chasis');
-		const eje = this.scene.getObjectByName('eje');
-		const llanta = this.scene.getObjectByName('llanta');
-		const cubierta = this.scene.getObjectByName('cubierta');
-		const tuerca = this.scene.getObjectByName('tuerca');
-		const vehiculo = new THREE.Group();
+	prepareScene() {
+		this.vehiculo = new THREE.Group();
+		let axesHelper = new THREE.AxesHelper(20);
+		this.vehiculo.add(axesHelper);
+		this.scene.add(this.vehiculo);
+		this.camaraVehiculo = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+		this.camaraVehiculo.position.set(-200, 100, 200);
+		this.camaraVehiculo.lookAt(0, 0, 0);
+		this.vehiculo.add(this.camaraVehiculo);
+
+		this.camaraConductor = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+	}
+
+	buildPath() {
+		this.path = new THREE.CatmullRomCurve3([
+			new THREE.Vector3(100, 0, 0),
+			new THREE.Vector3(700, 0, 0),
+			new THREE.Vector3(600, 0, 600),
+			new THREE.Vector3(0, 0, 700),
+			new THREE.Vector3(-600, 0, 600),
+			new THREE.Vector3(-700, 0, 0),
+			new THREE.Vector3(-600, 0, -600),
+			new THREE.Vector3(0, 0, -700),
+			new THREE.Vector3(600, 0, -600),
+			new THREE.Vector3(700, 0, 0),
+			new THREE.Vector3(100, 0, 0),
+		]);
+
+		const points = this.path.getPoints(100);
+		const geometry = new THREE.BufferGeometry().setFromPoints(points);
+		const material = new THREE.LineBasicMaterial({ color: 0x990000 });
+		const line = new THREE.Line(geometry, material);
+
+		this.scene.add(line);
+	}
+
+	onResize(aspect) {
+		this.camaraVehiculo.aspect = aspect;
+		this.camaraVehiculo.updateProjectionMatrix();
+		this.camaraConductor.aspect = aspect;
+		this.camaraConductor.updateProjectionMatrix();
+	}
+
+	construirVehiculo() {
+		this.cabina;
+		this.brazo;
+		this.antebrazo;
+		this.pala;
+		this.chasis;
+		this.eje;
+		this.llanta;
+		this.cubierta;
+		this.tuerca;
 
 		// **************************************************************
-		// Ejercicio:
+		// Ejercicio: ensamblar la excavadora
 		// **************************************************************
 		//
 		// Desplazamientos relativos entre piezas:
@@ -71,46 +156,66 @@ export class SceneManager {
 		//
 		// ***************************************************************
 
-		chasis.position.set(0, 0, 0);
+		// IMPORTANTE: no olvidar se setear position y rotation de cada pieza
+		// ya que por defecto tienen un valor no nulo
+		// completar a partir de aca ...
 
-		chasis.add(cabina);
-		cabina.position.set(0, 25, 0);
+		// ... hasta aca
 
-		cabina.add(brazo);
-		brazo.position.set(20, 20, -10);
-		brazo.rotation.z = -Math.PI / 4;
-
-		brazo.add(antebrazo);
-		antebrazo.position.set(-102, 0, 0);
-
-		antebrazo.add(pala);
-		pala.position.set(-60, 0, 0);
-
-		chasis.add(eje);
-		eje.position.set(20, 5, 0);
-		eje.rotation.x = Math.PI / 2;
-
-		eje.add(llanta);
-		llanta.position.set(0, 25, 0);
-
-		llanta.add(cubierta);
-		cubierta.position.set(0, 0, 0);
-
-		llanta.add(tuerca);
-		tuerca.position.set(0, 3, 0);
-
-		const llanta2 = llanta.clone();
-		llanta2.position.y *= -1;
-		llanta2.scale.y *= -1;
-		eje.add(llanta2);
-
-		const eje2 = eje.clone();
-		eje2.position.x *= -1;
-		chasis.add(eje2);
-
-		vehiculo.add(cabina);
-		vehiculo.add(chasis);
-		this.scene.add(vehiculo);
+		//this._solve();
 	}
-	animate() {}
+
+	_solve() {
+		armarSolucion({
+			chasis: this.chasis,
+			cabina: this.cabina,
+			brazo: this.brazo,
+			antebrazo: this.antebrazo,
+			pala: this.pala,
+			eje: this.eje,
+			llanta: this.llanta,
+			cubierta: this.cubierta,
+			tuerca: this.tuerca,
+			vehiculo: this.vehiculo,
+		});
+	}
+
+	animate(params) {
+		if (!this.ready) return;
+		/*
+		 params contiene:
+			posicionSobreRecorrido
+			anguloCabina
+			anguloBrazo
+			anguloAntebrazo
+			anguloPala
+		
+		*/
+		// actualizar angulos
+		this.cabina.rotation.y = (params.anguloCabina * Math.PI) / 180;
+		this.brazo.rotation.z = -Math.PI / 2 + (params.anguloBrazo * Math.PI) / 180;
+		this.antebrazo.rotation.z = (params.anguloAntebrazo * Math.PI) / 180;
+		this.pala.rotation.z = -Math.PI / 2 + (params.anguloPala * Math.PI) / 180;
+		this.eje.rotation.z = params.posicionSobreRecorrido * 0.01;
+
+		// ubicar vehiculo en el recorrido
+		this._ubicarVehiculo(params.posicionSobreRecorrido);
+	}
+
+	_ubicarVehiculo(u) {
+		let pos = this.path.getPointAt(Math.min(0.98, u));
+		pos.y += 10;
+		this.vehiculo.position.set(pos.x, pos.y, pos.z);
+		let target = this.path.getPointAt((u + 0.01) % 1);
+		target.y += 10;
+		let tangente = new THREE.Vector3();
+		tangente.subVectors(target, pos).normalize();
+		let yAxis = new THREE.Vector3(0, 1, 0);
+
+		let normal = new THREE.Vector3();
+		normal.crossVectors(yAxis, tangente).normalize();
+		let target2 = new THREE.Vector3();
+		target2.addVectors(pos, normal);
+		this.vehiculo.lookAt(target2);
+	}
 }
