@@ -14,7 +14,7 @@ const modelPaths = [
 	'/models/tuerca.dae',
 ];
 
-const ADD_HELPERS = false;
+const ADD_HELPERS = true;
 
 export class SceneManager {
 	path;
@@ -145,14 +145,15 @@ export class SceneManager {
 		//
 		// Desplazamientos relativos entre piezas:
 		//
-		// chasis       >>      cabina        0,25,0
+		// vehiculo     >>      cabina        0,25,0
 		// cabina       >>      brazo         20, 20, -10
 		// brazo        >>      antebrazo     -102,0,0
 		// antebrazo    >>      pala          -60,0,0
-		// chasis       >>      eje            20,5,0
-		// eje          >>      llanta         0,25,0
-		// llanta       >>      cubierta       0,0,0
-		// llanta       >>      tuerca         0,3,0
+		// vehiculo     >>      eje            20,5,0
+		// eje          >>      rueda          0,+-27,0
+		// rueda        >>      cubierta       0,0,0
+		// rueda        >>      llanta         0,0,0
+		// rueda        >>      tuerca         *,*,3  (xz depende de la ubicacion de la tuerca)
 		//
 		// ***************************************************************
 
