@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    
+    <meta charset="UTF-8">
+    <title></title>
+    <link rel="stylesheet" type="text/css" href="css/global.css"></link>
+
+    <script src="js/jquery.min.js"></script>    
+    <script src="js/three.js"></script>    
+    <script src="js/dat.gui.js"></script> 
+    <script src="js/controls/OrbitControls.js"></script>  
+    <script src="js/loaders/GLTFLoader.js"></script>          
+
+</head>
+<body>
+    <div id="container3D"></div>
+
+    <script type="text/javascript">
+  
+        var $window=$(window);    
+        var $container = $('#container3D');
+
+        var renderer,camera,scene,controls;   
+
+        var anguloCamara=0;
+
+        var spotlightAngle=0;
+
+        var spotLightHelper,directionalLightHelper;
+
+        var ambientLight,directionalLight,spotLight,pointLight,hemiLight;         
+
+        function start(){
+
+            // configuración básica de Three.js
+            renderer = new THREE.WebGLRenderer({antialias:true});
+            renderer.setSize($window.width(), $window.height()-5);
+            renderer.setClearColor(0xFFFFFF);
+            
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap
+            renderer.shadowMapSoft = true;    
+
+            var aspect=$window.width()/$window.height();
+
+            camera = new THREE.PerspectiveCamera(55,aspect,0.1,100000);
+            camera.position.set(-80,25,20);
+            camera.lookAt(new THREE.Vector3(0,30,0));
+
+            scene = new THREE.Scene();
+            controls = new THREE.OrbitControls(camera,renderer.domElement);
+            controls.target.y=10;
+            controls.update();
+            controls.screenSpacePanning=true;
+
+            $container.append(renderer.domElement);
+            $window.resize(onResize);
+
+            gridHelper = new THREE.GridHelper( 100,10 );
+            scene.add( gridHelper );
+
+            axesHelper = new THREE.AxesHelper( 8 );
+            scene.add( axesHelper );
+
+            
+        }
+
+        function setLights(){
+
+	        // Luz ambiente
+			ambientLight = new THREE.AmbientLight( 0x444466 ); // soft white light
+			scene.add( ambientLight );
+
+			// Luz direccional
+			directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
+			directionalLight.position.set( -90, 50, 40 );
+
+            directionalLight.castShadow = true;            // default false
+  
+
+            var size=100;
+            var resolucion=1024;
+
+            directionalLight.shadow.mapSize.width = resolucion;  
+            directionalLight.shadow.mapSize.height = resolucion; 
+            directionalLight.shadow.camera.near = 0.5;    
+            directionalLight.shadow.camera.far = 900;     
+            directionalLight.shadow.camera.top = -size;     
+            directionalLight.shadow.camera.left = -size;     
+            directionalLight.shadow.camera.bottom = size;     
+            directionalLight.shadow.camera.right = size;   
+            directionalLight.shadow.bias=-0.01;
+            
+            
+            var helper = new THREE.CameraHelper( directionalLight.shadow.camera );
+            //scene.add( helper );               
+			
+            scene.add( directionalLight );
+
+			// Luz hemisferica			
+			hemiLight = new THREE.HemisphereLight( 0x554466, 0x332211, 1 );
+			scene.add( hemiLight );
+
+			// Luz Puntual
+
+
+			
+            scene.add( spotLightHelper );
+
+            
+            directionalLight.visible=true;
+        }
+
+        
+
+        function createScene(){
+            var loader = new THREE.GLTFLoader();
+           
+           loader.load(
+               
+               'modelos/shadows.gltf',
+               
+               function ( gltf ) {
+
+                    gltf.animations; // Array<THREE.AnimationClip>
+                    gltf.scene; // THREE.Scene
+                    gltf.scenes; // Array<THREE.Scene>
+                    gltf.cameras; // Array<THREE.Camera>
+                    gltf.asset; // Object
+
+                    gltf.scene.traverse( function ( child ) {
+                        if ( child.isMesh ) {
+                            child.castShadow=true;
+                            child.receiveShadow=true;
+                        }
+                    });
+
+                    scene.add( gltf.scene );                    
+
+               },
+               // called while loading is progressing
+               function ( xhr ) {
+                   console.log( ( xhr.loaded / xhr.total * 100 ) + '% loaded' );
+               },
+               // called when loading has errors
+               function ( error ) {
+                   console.log( 'An error happened' );
+               }
+           );
+       
+       
+    
+        }
+
+        function createMenu(){
+            var gui = new dat.GUI( );
+	        gui.domElement.id = 'gui';
+	        gui.add(window,"anguloCamara",0,Math.PI*2);
+
+        }
+
+        function toggleHelpers(){
+				//directionalLightHelper.visible=!directionalLightHelper.visible;
+				spotLightHelper.visible=!spotLightHelper.visible;
+				pointLightHelper.visible=!pointLightHelper.visible;
+				axesHelper.visible=!axesHelper.visible;
+				gridHelper.visible=!gridHelper.visible;
+		}
+
+        function onResize(){
+            
+            renderer.setSize($window.width(), $window.height()-5);
+                    
+            camera.aspect=$window.width()/$window.height();
+            camera.updateProjectionMatrix();
+
+        }
+
+        function render() {
+            requestAnimationFrame(render);
+
+            var x=Math.sin(anguloCamara)*100;
+            var z=Math.cos(anguloCamara)*100;
+
+            directionalLight.position.set(x,50,z);
+
+
+            renderer.render(scene, camera,false,false);   
+
+
+        }
+
+
+    
+        start();
+        setLights();
+        createScene();
+        createMenu();
+        render();
+    
+
+    </script>
+
+
+</body>
+</html>
