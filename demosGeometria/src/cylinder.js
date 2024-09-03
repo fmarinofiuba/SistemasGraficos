@@ -75,10 +75,10 @@ function buildCap(buffers, radius, z, isTopCap = false) {
 			// The order of the vertices is reversed for the top cap
 			if (!isTopCap) {
 				// The indices of the triangle
-				indices.push(a, c, b);
+				indices.push(a, b, c);
 			} else {
 				// The indices of the triangle
-				indices.push(a, b, c);
+				indices.push(a, c, b);
 			}
 		}
 	}
