@@ -8,7 +8,7 @@ import * as dat from 'dat.gui';
 let scene, camera, renderer, container, group;
 
 const params = {
-	currentSurface: 'waves', //plane, waves
+	currentSurface: 'torus', //plane, waves, torus
 	showWireframe: false,
 };
 
@@ -81,6 +81,23 @@ function getParametricWavesFunction(width, height, freq1 = 3, amplitude = 1) {
 	};
 }
 
+// Torus
+function getParametricTorusFunction(radio1, radio2, from = 0, to = Math.PI * 2, freq = 40, amplitude = 0) {
+	return function (u, v, target) {
+		// basado en u,v obtener el punto x,y,z de un toroide
+		const theta = 2 * Math.PI * u;
+		const phi = (to - from) * (from + v);
+
+		const delta = Math.sin(freq * v) * amplitude;
+
+		const z = (radio1 + (radio2 + delta) * Math.cos(theta)) * Math.cos(phi);
+		const y = (radio1 + (radio2 + delta) * Math.cos(theta)) * Math.sin(phi);
+		const x = (radio2 + delta) * Math.sin(theta);
+
+		target.set(x, y, z);
+	};
+}
+
 function buildScene() {
 	const map = new THREE.TextureLoader().load('https://threejs.org/examples/textures/uv_grid_opengl.jpg');
 	map.wrapS = map.wrapT = THREE.RepeatWrapping;
@@ -105,13 +122,17 @@ function buildScene() {
 		case 'waves':
 			samplingFunction = getParametricWavesFunction(10, 10);
 			break;
+		case 'torus':
+			samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4);
+			//samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4, 40, 0.5);
+			break;
 	}
 
 	if (group) scene.remove(group);
 	group = new THREE.Group();
 	scene.add(group);
 
-	let geometry = new ParametricGeometry(samplingFunction, 50, 50);
+	let geometry = new ParametricGeometry(samplingFunction, 100, 100);
 	let mesh = new THREE.Mesh(geometry, material);
 	group.add(mesh);
 	mesh = new THREE.Mesh(geometry, wireMat);
