@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
+//import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
 import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
-import { ParametricGeometries } from 'three/examples/jsm/geometries/ParametricGeometries.js';
+//import { ParametricGeometries } from 'three/examples/jsm/geometries/ParametricGeometries.js';
 import * as dat from 'dat.gui';
 let scene, camera, renderer, container, group;
 
@@ -62,7 +62,7 @@ function getParametricPlaneFunction(width, height) {
 	return function (u, v, target) {
 		const x = -width / 2 + u * width;
 		const y = 0;
-		const z = -width / 2 + v * height;
+		const z = -height / 2 + v * height;
 
 		target.set(x, y, z);
 	};
@@ -73,7 +73,7 @@ function getParametricWavesFunction(width, height, freq1 = 3, amplitude = 1) {
 	return function (u, v, target) {
 		const x = -width / 2 + u * width;
 
-		const z = -width / 2 + v * height;
+		const z = -height / 2 + v * height;
 		let distance = Math.sqrt(x * x + z * z);
 
 		const y = (Math.sin(distance * freq1) * amplitude) / (1 + distance);
