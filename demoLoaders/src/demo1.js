@@ -50,7 +50,7 @@ function buildScene() {
 function onModelLoaded(gltf) {
 	console.log('Model loaded', gltf);
 	gltf.scene;
-	gltf.a;
+
 	scene.add(gltf.scene);
 }
 
@@ -61,10 +61,10 @@ function onProgress(event) {
 function onLoadError(event) {
 	console.error('Error loading', event);
 }
+
 function onResize() {
 	camera.aspect = container.offsetWidth / container.offsetHeight;
 	camera.updateProjectionMatrix();
-
 	renderer.setSize(container.offsetWidth, container.offsetHeight);
 }
 

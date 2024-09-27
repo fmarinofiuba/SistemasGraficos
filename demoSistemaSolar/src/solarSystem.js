@@ -1,6 +1,34 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Trail } from './trails';
+
+/* 
+*********************************************************************************
+            
+Consigna
+--------
+
+1) Definir en setupSceneGraph() el arbol de escena de tal modo que las transformaciones de Tierra, 
+la Luna, la Estacion Espacial (ISS) y la nave Apollo, repoduzcan los movimientos reales 
+de cada cuerpo.
+
+2) Actualizar las transformaciones de los objetos en el metodo update(), tienen ahi la variable time
+
+
+Condiciones a cumplir:
+---------------------
+
+- La tierra rota alrededor del sol sobre el plano XZ (ciclo anual)
+- La tierra tiene su eje inclinado de 23 grados (ver explicacion en carpeta images/tierra*.jpg). 
+- El eje de la tierra no cambia su orientación respecto del sistema de coordenadas global (ver opcion showHelpers)
+- La tierra rota sobre su eje (ciclo del día)            
+- Rotación de la luna alrededor de la tierra (una vuelta cada 30 días y siempre expone la misma cara hacia la tierra)
+- La nave Apolo debe estar ubicada sobre la cara oculta de la luna
+- La ISS debe orbital alrededor de la tierra pasando por encima y por debajo de la misma y 
+  orientando sus paneles en un plano perpendicular al vector normal de la superficie de la tierra.            
+
+*********************************************************************************
+*/
 export class SolarSystem {
 	models = {};
 	cameras = {
@@ -118,43 +146,30 @@ export class SolarSystem {
 	}
 
 	setupSceneGraph() {
-		/* *********************************************************************************
-
-            
-            Consigna
-            ---------
-		
-            Definir el arbol de la escena de tal modo que las transformaciones de Tierra, la Luna, la Estacion Espacial (ISS) y
-			la nave Apollo, repoduzcan los movimientos reales de cada cuerpo.
-
-            Condiciones a cumplir:
-            ---------------------
-
-		    - La tierra rota alrededor del sol sobre el plano XZ (ciclo anual)
-            - La tierra tiene su eje inclinado de 23 grados (ver explicacion en carpeta images/tierra*.jpg). 
-			- El eje de la tierra no cambia su orientación respecto del sistema de coordenadas global (ver opcion showHelpers)
-            - La tierra rota sobre su eje (ciclo del día)            
-		    - Rotación de la luna alrededor de la tierra (una vuelta cada 30 días y siempre expone la misma cara hacia la tierra)
-            - La nave Apolo debe estar ubicada sobre la cara oculta de la luna
-            - La ISS debe orbital alrededor de la tierra pasando por encima y por debajo de la misma y orientando sus paneles
-			  en un plano perpendicular al vector normal de la superficie de la tierra.            
-
-            *********************************************************************************
-            */
-	}
-
-	update(time) {
-		if (!this.isReady) return;
-		//console.log('time:', time);
-		// Actualizar las transformaciones de los objetos de la escena
 		let sun = this.models['sun'];
 		let earth = this.models['earth'];
 		let moon = this.models['moon'];
 		let iss = this.models['iss'];
 		let apollo = this.models['apollo'];
 
-		// Actualizar aqui las transformaciones de los objetos de la escena
-		// ...
+		// definir aqui el grafo de escena ...
+
+		// *****************************************
+	}
+
+	update(time) {
+		if (!this.isReady) return;
+		//console.log('time:', time);
+
+		let sun = this.models['sun'];
+		let earth = this.models['earth'];
+		let moon = this.models['moon'];
+		let iss = this.models['iss'];
+		let apollo = this.models['apollo'];
+
+		// Actualizar aqui las transformaciones ...
+
+		// *****************************************
 
 		this.earthTrail.pushPosition(earth.localToWorld(new THREE.Vector3(0, 0, 0)));
 		this.moonTrail.pushPosition(moon.localToWorld(new THREE.Vector3(0, 0, 0)));
@@ -176,6 +191,7 @@ export class SolarSystem {
 	getCurrentCamera() {
 		return this.cameras[this.currentCamera];
 	}
+
 	showHelpers(value) {
 		this.helpers.visible = value;
 	}

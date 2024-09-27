@@ -46,7 +46,7 @@ function onResize() {
 
 function loadTexture() {
 	texture = new THREE.TextureLoader().load(
-		'maps/elevationMap2.png',
+		'maps/elevationMap3.png',
 		function (texture) {
 			// The texture is loaded
 			buildScene();

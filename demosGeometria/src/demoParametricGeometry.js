@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
+//import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
 import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
-import { ParametricGeometries } from 'three/examples/jsm/geometries/ParametricGeometries.js';
+//import { ParametricGeometries } from 'three/examples/jsm/geometries/ParametricGeometries.js';
 import * as dat from 'dat.gui';
 let scene, camera, renderer, container, group;
 
 const params = {
-	currentSurface: 'waves', //plane, waves
+	currentSurface: 'torus', //plane, waves, torus
 	showWireframe: false,
 };
 
@@ -62,7 +62,7 @@ function getParametricPlaneFunction(width, height) {
 	return function (u, v, target) {
 		const x = -width / 2 + u * width;
 		const y = 0;
-		const z = -width / 2 + v * height;
+		const z = -height / 2 + v * height;
 
 		target.set(x, y, z);
 	};
@@ -73,10 +73,27 @@ function getParametricWavesFunction(width, height, freq1 = 3, amplitude = 1) {
 	return function (u, v, target) {
 		const x = -width / 2 + u * width;
 
-		const z = -width / 2 + v * height;
+		const z = -height / 2 + v * height;
 		let distance = Math.sqrt(x * x + z * z);
 
 		const y = (Math.sin(distance * freq1) * amplitude) / (1 + distance);
+		target.set(x, y, z);
+	};
+}
+
+// Torus
+function getParametricTorusFunction(radio1, radio2, from = 0, to = Math.PI * 2, freq = 40, amplitude = 0) {
+	return function (u, v, target) {
+		// basado en u,v obtener el punto x,y,z de un toroide
+		const theta = 2 * Math.PI * u;
+		const phi = (to - from) * (from + v);
+
+		const delta = Math.sin(freq * v) * amplitude;
+
+		const z = (radio1 + (radio2 + delta) * Math.cos(theta)) * Math.cos(phi);
+		const y = (radio1 + (radio2 + delta) * Math.cos(theta)) * Math.sin(phi);
+		const x = (radio2 + delta) * Math.sin(theta);
+
 		target.set(x, y, z);
 	};
 }
@@ -105,13 +122,17 @@ function buildScene() {
 		case 'waves':
 			samplingFunction = getParametricWavesFunction(10, 10);
 			break;
+		case 'torus':
+			samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4);
+			//samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4, 40, 0.5);
+			break;
 	}
 
 	if (group) scene.remove(group);
 	group = new THREE.Group();
 	scene.add(group);
 
-	let geometry = new ParametricGeometry(samplingFunction, 50, 50);
+	let geometry = new ParametricGeometry(samplingFunction, 100, 100);
 	let mesh = new THREE.Mesh(geometry, material);
 	group.add(mesh);
 	mesh = new THREE.Mesh(geometry, wireMat);
