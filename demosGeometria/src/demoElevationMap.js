@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createCylinder, createClosedCylinder } from './cylinder.js';
 
 import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
-import { ElevationGeometry } from './ElevationGeometry.js';
+import { ElevationGeometry } from './elevationGeometry.js';
 
 let scene, camera, renderer, container, texture;
 
