@@ -26,7 +26,7 @@ function setupThreeJs() {
 	const ambientLight = new THREE.AmbientLight(0x666666);
 	scene.add(ambientLight);
 
-	const grid = new THREE.GridHelper(20, 10);
+	const grid = new THREE.GridHelper(20, 20);
 	scene.add(grid);
 
 	window.addEventListener('resize', onResize);
@@ -37,14 +37,33 @@ function onResize() {
 	camera.aspect = container.offsetWidth / container.offsetHeight;
 	camera.left = -10 * camera.aspect;
 	camera.right = 10 * camera.aspect;
-	camera.top = 10;
-	camera.bottom = -10;
+	camera.top = -10;
+	camera.bottom = 10;
 	camera.updateProjectionMatrix();
 
 	renderer.setSize(container.offsetWidth, container.offsetHeight);
 }
 
-function buildCurve() {}
+function buildCurve() {
+	const curve = new THREE.CubicBezierCurve3(
+		new THREE.Vector3(-5, 0, -5),
+		new THREE.Vector3(-5, 0, 5),
+		new THREE.Vector3(5, 0, -5),
+		new THREE.Vector3(5, 0, 5)
+	);
+
+	const points = curve.getPoints(50);
+	const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+	const material = new THREE.LineBasicMaterial({ color: 0xff0000 });
+
+	// Create the final object to add to the scene
+	const curveObject = new THREE.Line(geometry, material);
+
+	// Create the final object to add to the scene
+
+	scene.add(curveObject);
+}
 
 function animate() {
 	requestAnimationFrame(animate);

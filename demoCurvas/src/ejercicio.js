@@ -26,8 +26,17 @@ function setupThreeJs() {
 	const ambientLight = new THREE.AmbientLight(0x666666);
 	scene.add(ambientLight);
 
-	const grid = new THREE.GridHelper(20, 20);
+	const grid = new THREE.GridHelper(20, 2);
 	scene.add(grid);
+
+	let texture = new THREE.TextureLoader().load('maps/s.png');
+	let plane = new THREE.Mesh(
+		new THREE.PlaneGeometry(20, 20),
+		new THREE.MeshBasicMaterial({ color: 0xffffff, map: texture })
+	);
+	plane.rotation.x = Math.PI / 2;
+	plane.position.y = -5;
+	scene.add(plane);
 
 	window.addEventListener('resize', onResize);
 	onResize();
@@ -45,14 +54,12 @@ function onResize() {
 }
 
 function buildCurve() {
-	//Create a closed wavey loop
-	const curve = new THREE.CatmullRomCurve3([
-		new THREE.Vector3(-5, 0, 5),
-		new THREE.Vector3(-5, 1, -5),
-		new THREE.Vector3(0, 0, 0),
-		new THREE.Vector3(5, -1, 5),
-		new THREE.Vector3(5, 0, -5),
-	]);
+	const curve = new THREE.CubicBezierCurve3(
+		new THREE.Vector3(-8, 0, -5),
+		new THREE.Vector3(-8, 0, -1),
+		new THREE.Vector3(-4, 0, -1),
+		new THREE.Vector3(-4, 0, 5)
+	);
 
 	const points = curve.getPoints(50);
 	const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -61,8 +68,12 @@ function buildCurve() {
 
 	// Create the final object to add to the scene
 	const curveObject = new THREE.Line(geometry, material);
+
+	// Create the final object to add to the scene
+
 	scene.add(curveObject);
 }
+
 function animate() {
 	requestAnimationFrame(animate);
 	renderer.render(scene, camera);

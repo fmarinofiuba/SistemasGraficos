@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Template 3</title>
+		<style>
+			body {
+				font-family: Arial;
+				font-size: 100%;
+			}
+
+			#pad {
+				width: 200px;
+				height: 150px;
+				position: absolute;
+				top: 300px;
+				right: 0px;
+				border: 1px solid red;
+				background: #cccccc;
+				text-align: center;
+				font-size: 20px;
+			}
+
+			#botonera {
+				position: absolute;
+				top: 0;
+				right: 0;
+			}
+
+			#botonera a {
+				display: inline-block;
+				padding: 10px;
+			}
+
+			#bases {
+				position: absolute;
+				top: 200px;
+				right: 0;
+				padding: 30px;
+				border: 1px solid black;
+				width: 400px;
+				font-size: 25px;
+				line-height: 200%;
+			}
+
+			#myCanvas {
+				/*background-image: url("s8.jpg");*/
+				cursor: crosshair;
+			}
+
+			h1 {
+				font-size: 35px;
+				margin-top: 0;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas id="myCanvas" width="800" height="600" style="border: 3px solid #d3d3d3">
+			Your browser does not support the HTML5 canvas tag.
+		</canvas>
+
+		<div id="botonera">
+			<a href="#" id="bezier3">Curvas Bezier cúbicas</a> <br />
+
+			<a href="#" id="bezier2">Curvas Bezier cuadráticas</a> <br />
+		</div>
+
+		<script type="module" src="/src/demoBezier2D.js"></script>
+	</body>
+</html>
