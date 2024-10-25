@@ -56,7 +56,7 @@ function buildScene() {
 	material = new THREE.RawShaderMaterial({
 		uniforms: {
 			time: { value: 1.0 },
-			texture: { value: eifel, type: 't' },
+			eifel: { value: eifel, type: 't' },
 			checker: { value: checker2, type: 't' },
 		},
 		vertexShader: vertexShader,
