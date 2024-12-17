@@ -12,8 +12,8 @@ function setupThreeJs() {
 
 	container.appendChild(renderer.domElement);
 
-	camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-	camera.position.set(10, 10, 10);
+	camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 1, 1000);
+	camera.position.set(0, 10, 0);
 	camera.lookAt(0, 0, 0);
 
 	const controls = new OrbitControls(camera, renderer.domElement);
@@ -26,7 +26,7 @@ function setupThreeJs() {
 	const ambientLight = new THREE.AmbientLight(0x666666);
 	scene.add(ambientLight);
 
-	const grid = new THREE.GridHelper(20, 10);
+	const grid = new THREE.GridHelper(20, 20);
 	scene.add(grid);
 
 	window.addEventListener('resize', onResize);
@@ -35,6 +35,10 @@ function setupThreeJs() {
 
 function onResize() {
 	camera.aspect = container.offsetWidth / container.offsetHeight;
+	camera.left = -10 * camera.aspect;
+	camera.right = 10 * camera.aspect;
+	camera.top = -10;
+	camera.bottom = 10;
 	camera.updateProjectionMatrix();
 
 	renderer.setSize(container.offsetWidth, container.offsetHeight);
@@ -43,11 +47,11 @@ function onResize() {
 function buildCurve() {
 	//Create a closed wavey loop
 	const curve = new THREE.CatmullRomCurve3([
-		new THREE.Vector3(-10, 0, 10),
-		new THREE.Vector3(-5, 5, 5),
+		new THREE.Vector3(-5, 0, 5),
+		new THREE.Vector3(-5, 1, -5),
 		new THREE.Vector3(0, 0, 0),
-		new THREE.Vector3(5, -5, 5),
-		new THREE.Vector3(10, 0, 10),
+		new THREE.Vector3(5, -1, 5),
+		new THREE.Vector3(5, 0, -5),
 	]);
 
 	const points = curve.getPoints(50);

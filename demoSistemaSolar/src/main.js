@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-//import { SolarSystem } from './solarSystem.js';
-import { SolarSystem } from './solarSystem.ignore.js';
+import { SolarSystem } from './solarSystem.js';
+//import { SolarSystem } from './solarSystem.ignore.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 

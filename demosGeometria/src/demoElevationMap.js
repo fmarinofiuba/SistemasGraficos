@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createCylinder, createClosedCylinder } from './cylinder.js';
 
 import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
-import { ElevationGeometry } from './ElevationGeometry.js';
+import { ElevationGeometry } from './elevationGeometry.js';
 
 let scene, camera, renderer, container, texture;
 
@@ -46,7 +46,7 @@ function onResize() {
 
 function loadTexture() {
 	texture = new THREE.TextureLoader().load(
-		'maps/elevationMap2.png',
+		'maps/elevationMap3.png',
 		function (texture) {
 			// The texture is loaded
 			buildScene();

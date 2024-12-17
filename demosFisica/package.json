@@ -9,6 +9,9 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ammo.js": "^0.0.10",
+    "cannon-es": "^0.20.0",
+    "dat.gui": "^0.7.9",
     "three": "^0.162.0"
   },
   "devDependencies": {
