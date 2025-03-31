@@ -159,6 +159,19 @@ export class SceneManager {
 
 		// IMPORTANTE: no olvidar se setear position y rotation de cada pieza
 		// ya que por defecto tienen un valor no nulo
+		// los modelos estan disponibles para ser clonados bajo estos atributos
+		// this.cabina;
+		// this.brazo;
+		// this.antebrazo;
+		// this.pala;
+		// this.chasis;
+		// this.eje;
+		// this.llanta;
+		// this.cubierta;
+		// this.tuerca;
+
+		// para clonarlos hacer: let tuerca=this.tuerca.clone(); 
+
 		// completar a partir de aca ...
 
 		// ... hasta aca
