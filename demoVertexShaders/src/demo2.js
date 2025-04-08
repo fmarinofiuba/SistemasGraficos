@@ -54,7 +54,7 @@ function buildBox() {
 		// Se definen los uniforms que se usarán en los shaders
 		uniforms: {
 			modelMatrix: { value: new THREE.Matrix4() },
-			normalMatrix: { value: new THREE.Matrix4() },
+			normalMatrix1: { value: new THREE.Matrix4() },
 			normalMatrix2: { value: new THREE.Matrix4() },
 			viewMatrix: { value: new THREE.Matrix4() },
 			projectionMatrix: { value: new THREE.Matrix4() },
@@ -71,8 +71,8 @@ function buildBox() {
 
 			// Uniforms
 			uniform mat4 modelMatrix;		// Matriz de transformación del objeto
-            uniform mat4 normalMatrix;	    // Matriz de transformación de las normales en coord de cámara
-			uniform mat4 normalMatrix2;	    // Matriz de transformación de las normales en coord de mundo
+            uniform mat4 normalMatrix1;	    // Matriz de transformación de las normales en coord de mundo
+			uniform mat4 normalMatrix2;	    // Matriz de transformación de las normales en coord de camara
 			uniform mat4 viewMatrix;		// Matriz de transformación de la cámara
 			uniform mat4 projectionMatrix;	//	Matriz de proyección de la cámara
 
@@ -96,10 +96,11 @@ function buildBox() {
 				// Sin transformar
 				//vNormal = normal;
 
-				// Transformada a coordenadas de cámara
-                vNormal = (normalMatrix * vec4(normal,1.0)).xyz;
+				// Transformada a coordenadas de mundo				
+                vNormal = (normalMatrix1 * vec4(normal,1.0)).xyz;
 
-				// Transformada a coordenadas de mundo
+				// Transformada a coordenadas de camara
+				// las normales son azules cuando apuntan hacia la cámara
 				//vNormal = (normalMatrix2 * vec4(normal,1.0)).xyz;
                 
 
@@ -132,11 +133,20 @@ function buildBox() {
 		// La matriz de transformación del objeto respecto al mundo
 		uniforms.modelMatrix.value = box.matrixWorld;
 
-		let m = box.matrixWorld.clone();
-		m.invert();
-		m.transpose();
+		let m1 = box.matrixWorld.clone();
+		
+		let m2=m1.clone();
+		m2.premultiply(camera.matrixWorldInverse);
 
-		uniforms.normalMatrix2.value = m;
+		m1.invert();
+		m1.transpose();
+
+		m2.invert();
+		m2.transpose();
+
+		
+		uniforms.normalMatrix1.value.copy(m1);
+		uniforms.normalMatrix2.value.copy(m2);
 		// La matriz de transformación del mundo respecto a la cámara
 		uniforms.viewMatrix.value = camera.matrixWorldInverse;
 		// La matriz de proyección de la cámara
