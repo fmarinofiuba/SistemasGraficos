@@ -23,8 +23,8 @@ function setupThreeJs() {
 
 	controls = new OrbitControls(camera, renderer.domElement);
 	controls.enableDamping = true;
-	controls.dampingFactor = 0.05;
-	controls.screenSpacePanning = false;
+	controls.dampingFactor = 0.2;
+	//controls.screenSpacePanning = false;
 	controls.minDistance = 1;
 	controls.maxDistance = 10;
 	// controls.target.set(0, 0, 0); // OrbitControls target is (0,0,0) by default
