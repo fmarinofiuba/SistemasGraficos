@@ -38,8 +38,10 @@ export class HSVColorSpace extends ColorSpace {
 		this.currentVisuals.add(s_axisLine);
 		this.currentVisuals.add(this.makeTextSprite('S', new THREE.Vector3(1.1, 0, 0)));
 
-		// Hue is represented by the circumference, label 'H' can be placed near it.
-		this.currentVisuals.add(this.makeTextSprite('H', new THREE.Vector3(0.7, 0.7, 0.7))); // Arbitrary position for H
+		// Hue is represented by the circumference. Position 'H' label near the top circle, slightly outside its radius.
+		const outlineTopY = 1.0; // Height of the top circle of the outline
+		const outlineRadius = 1.0; // Radius of the outline cylinder
+		this.currentVisuals.add(this.makeTextSprite('H', new THREE.Vector3(outlineRadius + 0.15, outlineTopY, 0)));
 
 		console.log('HSV Axes and Labels built');
 	}
