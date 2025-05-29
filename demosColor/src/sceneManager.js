@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { RGBColorSpace } from './RGBColorSpace.js';
 import { CMYColorSpace } from './CMYColorSpace.js';
 import { HSVColorSpace } from './HSVColorSpace.js';
-// Import other color spaces like HSLColorSpace later
+import { HSLColorSpace } from './HSLColorSpace.js';
 
 export class SceneManager {
     constructor(scene, camera, renderer, controls) {
@@ -62,7 +62,9 @@ export class SceneManager {
             case 'HSV':
                 this.activeColorSpace = new HSVColorSpace(this.scene);
                 break;
-            // Add cases for 'HSL' later
+            case 'HSL':
+                this.activeColorSpace = new HSLColorSpace(this.scene);
+                break;
             default:
                 console.error(`Unsupported color model type: ${modelType}`);
                 return;

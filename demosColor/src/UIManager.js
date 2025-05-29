@@ -128,21 +128,42 @@ export class UIManager {
     }
 
     getCurrentLimits() {
-        // Returns an object with only the limits relevant to the current model
+        // Returns an object with the nested structure { component: { min: value, max: value } }
+        // Also normalizes Hue for HSL/HSV to [0, 1] for shader compatibility.
         let currentLimits = {};
         switch (this.currentModel) {
             case 'RGB':
-                currentLimits = { rMin: this.limits.rMin, rMax: this.limits.rMax, gMin: this.limits.gMin, gMax: this.limits.gMax, bMin: this.limits.bMin, bMax: this.limits.bMax };
+                currentLimits = {
+                    r: { min: this.limits.rMin, max: this.limits.rMax },
+                    g: { min: this.limits.gMin, max: this.limits.gMax },
+                    b: { min: this.limits.bMin, max: this.limits.bMax }
+                };
                 break;
             case 'CMY':
-                currentLimits = { cMin: this.limits.cMin, cMax: this.limits.cMax, mMin: this.limits.mMin, mMax: this.limits.mMax, yMin: this.limits.yMin, yMax: this.limits.yMax };
+                currentLimits = {
+                    c: { min: this.limits.cMin, max: this.limits.cMax },
+                    m: { min: this.limits.mMin, max: this.limits.mMax },
+                    y: { min: this.limits.yMin, max: this.limits.yMax }
+                };
                 break;
-            case 'HSV':
-                currentLimits = { hMin: this.limits.hMin, hMax: this.limits.hMax, sMin: this.limits.sMin, sMax: this.limits.sMax, vMin: this.limits.vMin, vMax: this.limits.vMax };
+            case 'HSV': // Assuming HSV also needs H normalized and nested structure
+                currentLimits = {
+                    h: { min: this.limits.hMin / 360, max: this.limits.hMax / 360 },
+                    s: { min: this.limits.sMin, max: this.limits.sMax },
+                    v: { min: this.limits.vMin, max: this.limits.vMax }
+                };
                 break;
             case 'HSL':
-                currentLimits = { hMin: this.limits.hMinHSL, hMax: this.limits.hMaxHSL, sMin: this.limits.sMinHSL, sMax: this.limits.sMaxHSL, lMin: this.limits.lMin, lMax: this.limits.lMax }; // Note: HSL uses hMinHSL etc.
+                currentLimits = {
+                    h: { min: this.limits.hMinHSL / 360, max: this.limits.hMaxHSL / 360 },
+                    s: { min: this.limits.sMinHSL, max: this.limits.sMaxHSL },
+                    l: { min: this.limits.lMin, max: this.limits.lMax }
+                };
                 break;
+            default:
+                console.error(`UIManager: Unknown model type ${this.currentModel} in getCurrentLimits`);
+                // Return a default safe structure or throw error
+                currentLimits = { r: {min: 0, max: 1}, g: {min: 0, max: 1}, b: {min: 0, max: 1}};
         }
         return currentLimits;
     }

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
+import cmyVertexShader from './shaders/cmy/cmyVertex.glsl';
+import cmyFragmentShader from './shaders/cmy/cmyFragment.glsl';
 
 export class CMYColorSpace extends ColorSpace {
     constructor(scene) {
@@ -64,33 +66,9 @@ export class CMYColorSpace extends ColorSpace {
         const subBoxGeo = new THREE.BoxGeometry(width, height, depth);
         subBoxGeo.translate(currentLimits.cMin + width / 2, currentLimits.mMin + height / 2, currentLimits.yMin + depth / 2);
 
-        const cmyVertexShader = `
-            varying vec3 vLocalPosition;
-            void main() {
-                vLocalPosition = position;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-
-        const cmyFragmentShader = `
-            varying vec3 vLocalPosition;
-            uniform float u_cMin, u_cMax, u_mMin, u_mMax, u_yMin, u_yMax;
-
-            void main() {
-                float c = (vLocalPosition.x - u_cMin) / (u_cMax - u_cMin);
-                float m = (vLocalPosition.y - u_mMin) / (u_mMax - u_mMin);
-                float y = (vLocalPosition.z - u_yMin) / (u_yMax - u_yMin);
-                
-                // Convert CMY to RGB
-                float r = 1.0 - c;
-                float g = 1.0 - m;
-                float b = 1.0 - y;
-
-                gl_FragColor = vec4(clamp(r,0.0,1.0), clamp(g,0.0,1.0), clamp(b,0.0,1.0), 1.0);
-            }
-        `;
-
         const cmyShaderMaterial = new THREE.ShaderMaterial({
+            vertexShader: cmyVertexShader,
+            fragmentShader: cmyFragmentShader,
             uniforms: {
                 u_cMin: { value: currentLimits.cMin }, u_cMax: { value: currentLimits.cMax },
                 u_mMin: { value: currentLimits.mMin }, u_mMax: { value: currentLimits.mMax },
