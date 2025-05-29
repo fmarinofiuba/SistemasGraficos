@@ -35,6 +35,39 @@ export class CMYColorSpace extends ColorSpace {
         this.currentVisuals.add(this.makeTextSprite("C", { x: axisLength + 0.1, y: 0, z: 0 }));
         this.currentVisuals.add(this.makeTextSprite("M", { x: 0, y: axisLength + 0.1, z: 0 }));
         this.currentVisuals.add(this.makeTextSprite("Y", { x: 0, y: 0, z: axisLength + 0.1 }));
+
+        // Arrowheads
+        const coneRadius = 0.03;
+        const coneHeight = 0.06;
+        const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+        // C-axis arrowhead
+        const c_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
+        const c_arrowhead = new THREE.Mesh(c_coneGeometry, arrowMaterial);
+        c_arrowhead.position.set(axisLength, 0, 0);
+        const c_direction = new THREE.Vector3(1, 0, 0);
+        const c_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c_direction);
+        c_arrowhead.quaternion.multiply(c_quaternion);
+        c_arrowhead.position.addScaledVector(c_direction, coneHeight / 2);
+        this.currentVisuals.add(c_arrowhead);
+
+        // M-axis arrowhead
+        const m_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
+        const m_arrowhead = new THREE.Mesh(m_coneGeometry, arrowMaterial);
+        m_arrowhead.position.set(0, axisLength, 0);
+        // M-axis is along Y, cone's default orientation is Y-up, no rotation needed for quaternion.
+        m_arrowhead.position.addScaledVector(new THREE.Vector3(0,1,0), coneHeight / 2);
+        this.currentVisuals.add(m_arrowhead);
+
+        // Y-axis (Yellow) arrowhead
+        const y_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
+        const y_arrowhead = new THREE.Mesh(y_coneGeometry, arrowMaterial);
+        y_arrowhead.position.set(0, 0, axisLength);
+        const y_direction = new THREE.Vector3(0, 0, 1);
+        const y_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), y_direction);
+        y_arrowhead.quaternion.multiply(y_quaternion);
+        y_arrowhead.position.addScaledVector(y_direction, coneHeight / 2);
+        this.currentVisuals.add(y_arrowhead);
     }
 
     _buildFullSpaceOutlineObject() {
