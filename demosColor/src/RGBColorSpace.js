@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
+import rgbVertexShader from './shaders/rgb/rgbVertex.glsl';
+import rgbFragmentShader from './shaders/rgb/rgbFragment.glsl';
 
 export class RGBColorSpace extends ColorSpace {
     constructor(scene) {
@@ -64,35 +66,14 @@ export class RGBColorSpace extends ColorSpace {
         const subBoxGeo = new THREE.BoxGeometry(width, height, depth);
         subBoxGeo.translate(currentLimits.rMin + width / 2, currentLimits.gMin + height / 2, currentLimits.bMin + depth / 2);
 
-        const vertexShader = `
-            varying vec3 vLocalPosition;
-            void main() {
-                vLocalPosition = position;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-
-        const fragmentShader = `
-            varying vec3 vLocalPosition;
-            uniform float u_rMin, u_rMax, u_gMin, u_gMax, u_bMin, u_bMax;
-
-            void main() {
-                float r = (vLocalPosition.x - u_rMin) / (u_rMax - u_rMin);
-                float g = (vLocalPosition.y - u_gMin) / (u_gMax - u_gMin);
-                float b = (vLocalPosition.z - u_bMin) / (u_bMax - u_bMin);
-                
-                gl_FragColor = vec4(clamp(r,0.0,1.0), clamp(g,0.0,1.0), clamp(b,0.0,1.0), 1.0);
-            }
-        `;
-
         const rgbShaderMaterial = new THREE.ShaderMaterial({
+            vertexShader: rgbVertexShader,
+            fragmentShader: rgbFragmentShader,
             uniforms: {
                 u_rMin: { value: currentLimits.rMin }, u_rMax: { value: currentLimits.rMax },
                 u_gMin: { value: currentLimits.gMin }, u_gMax: { value: currentLimits.gMax },
                 u_bMin: { value: currentLimits.bMin }, u_bMax: { value: currentLimits.bMax },
             },
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
             side: THREE.DoubleSide,
             transparent: true,
             opacity: 0.8
