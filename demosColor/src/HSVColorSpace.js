@@ -39,7 +39,7 @@ export class HSVColorSpace extends ColorSpace {
 		const v_arrowhead = new THREE.Mesh(v_coneGeometry, arrowMaterial);
 		v_arrowhead.position.set(0, 1, 0); // Tip of V-axis
 		// Cone's axis is Y, already points up, no rotation needed if V is along Y
-		v_arrowhead.position.addScaledVector(new THREE.Vector3(0,1,0), coneHeight / 2); // Offset base to end of line
+		v_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2); // Offset base to end of line
 		this.currentVisuals.add(v_arrowhead);
 
 		// Saturation Axis (e.g., along X for visualization)
@@ -68,66 +68,66 @@ export class HSVColorSpace extends ColorSpace {
 		const outlineRadius = 1.0; // Radius of the outline cylinder
 		this.currentVisuals.add(this.makeTextSprite('H', new THREE.Vector3(outlineRadius + 0.15, outlineTopY, 0)));
 
-        // Add arcs with arrowheads to illustrate Hue direction
-        const arcRadius = outlineRadius + 0.1; // Slightly larger than the main outline
-        const arcY = outlineTopY;
-        const arcSegments = 16; // Number of segments for each arc
-        const arcTubeRadius = TUBE_RADIUS * 0.8; // Thinner tubes for arrows
-        // arrowMaterial is already defined
+		// Add arcs with arrowheads to illustrate Hue direction
+		const arcRadius = outlineRadius + 0.1; // Slightly larger than the main outline
+		const arcY = outlineTopY;
+		const arcSegments = 16; // Number of segments for each arc
+		const arcTubeRadius = TUBE_RADIUS * 0.8; // Thinner tubes for arrows
+		// arrowMaterial is already defined
 
-        const arcsData = [
-            { startAngleDeg: 15, endAngleDeg: 60 },
-            { startAngleDeg: 195, endAngleDeg: 240 }
-        ];
+		const arcsData = [
+			{ startAngleDeg: 15, endAngleDeg: 60 },
+			{ startAngleDeg: 195, endAngleDeg: 240 },
+		];
 
-        arcsData.forEach(arcData => {
-            const edges = [];
-            const points = [];
-            const startRad = THREE.MathUtils.degToRad(arcData.startAngleDeg);
-            const endRad = THREE.MathUtils.degToRad(arcData.endAngleDeg);
-            const angleStep = (endRad - startRad) / arcSegments;
+		arcsData.forEach((arcData) => {
+			const edges = [];
+			const points = [];
+			const startRad = THREE.MathUtils.degToRad(arcData.startAngleDeg);
+			const endRad = THREE.MathUtils.degToRad(arcData.endAngleDeg);
+			const angleStep = (endRad - startRad) / arcSegments;
 
-            for (let i = 0; i <= arcSegments; i++) {
-                const angle = startRad + i * angleStep;
-                points.push(new THREE.Vector3(arcRadius * Math.cos(angle), arcY, arcRadius * Math.sin(angle)));
-            }
-            for (let i = 0; i < arcSegments; i++) {
-                edges.push({ start: points[i], end: points[i+1] });
-            }
-            const arcTubeGeom = createTubesFromEdges(edges, arcTubeRadius, TUBE_RADIAL_SEGMENTS);
-            if (arcTubeGeom) {
-                const arcMesh = new THREE.Mesh(arcTubeGeom, arrowMaterial);
-                this.currentVisuals.add(arcMesh);
-            }
+			for (let i = 0; i <= arcSegments; i++) {
+				const angle = startRad + i * angleStep;
+				points.push(new THREE.Vector3(arcRadius * Math.cos(angle), arcY, arcRadius * Math.sin(angle)));
+			}
+			for (let i = 0; i < arcSegments; i++) {
+				edges.push({ start: points[i], end: points[i + 1] });
+			}
+			const arcTubeGeom = createTubesFromEdges(edges, arcTubeRadius, TUBE_RADIAL_SEGMENTS);
+			if (arcTubeGeom) {
+				const arcMesh = new THREE.Mesh(arcTubeGeom, arrowMaterial);
+				this.currentVisuals.add(arcMesh);
+			}
 
-            // Arrowhead cone
-            const coneRadius = 0.03;
-            const coneHeight = 0.06;
-            const coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-            const arrowhead = new THREE.Mesh(coneGeometry, arrowMaterial);
-            
-            // Position and orient arrowhead
-            const endPoint = points[points.length - 1];
-            const prevPoint = points[points.length - 2]; // Point before the end to determine direction
-            arrowhead.position.copy(endPoint);
-            
-            // Direction vector for the arrowhead
-            const direction = new THREE.Vector3().subVectors(endPoint, prevPoint).normalize();
-            // Align cone's axis (Y) with the direction vector
-            const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-            arrowhead.quaternion.multiply(quaternion); // Sets cone's Y-axis (tip) along 'direction'
-            // The following rotation was likely incorrect for a tangential arrowhead:
-            // arrowhead.rotateX(Math.PI / 2); 
-            // Small offset to position the base of the cone at the endpoint
-            // The cone's center is initially at endPoint, tip points along 'direction'.
-            // This moves the cone so its base (center of the -Y face) is at endPoint.
-            arrowhead.position.addScaledVector(direction, coneHeight / 2);
+			// Arrowhead cone
+			const coneRadius = 0.03;
+			const coneHeight = 0.06;
+			const coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
+			const arrowhead = new THREE.Mesh(coneGeometry, arrowMaterial);
 
-            this.currentVisuals.add(arrowhead);
-        });
+			// Position and orient arrowhead
+			const endPoint = points[points.length - 1];
+			const prevPoint = points[points.length - 2]; // Point before the end to determine direction
+			arrowhead.position.copy(endPoint);
 
-        console.log('HSV Axes and Labels built');
-    }
+			// Direction vector for the arrowhead
+			const direction = new THREE.Vector3().subVectors(endPoint, prevPoint).normalize();
+			// Align cone's axis (Y) with the direction vector
+			const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+			arrowhead.quaternion.multiply(quaternion); // Sets cone's Y-axis (tip) along 'direction'
+			// The following rotation was likely incorrect for a tangential arrowhead:
+			// arrowhead.rotateX(Math.PI / 2);
+			// Small offset to position the base of the cone at the endpoint
+			// The cone's center is initially at endPoint, tip points along 'direction'.
+			// This moves the cone so its base (center of the -Y face) is at endPoint.
+			arrowhead.position.addScaledVector(direction, coneHeight / 2);
+
+			this.currentVisuals.add(arrowhead);
+		});
+
+		console.log('HSV Axes and Labels built');
+	}
 
 	_buildFullSpaceOutlineObject() {
 		console.log('HSVColorSpace: Building full space outline with tubes (cylinder)');
@@ -173,20 +173,22 @@ export class HSVColorSpace extends ColorSpace {
 	}
 
 	_updateSubSpaceVolume(limits) {
-		// limits = { hMin, hMax, sMin, sMax, vMin, vMax }
+		// limits = { h.min, h.max, s.min, s.max, v.min, v.max }
 		console.log(`Updating HSV SubSpace Volume with limits:`, limits);
 
 		// Remove previous subspace volume if it exists
 		const existingVolume = this.currentVisuals.getObjectByName('subspaceVolume');
 		if (existingVolume) {
-			this.currentVisuals.remove(existingVolume);
-			if (existingVolume.geometry) existingVolume.geometry.dispose();
-			if (existingVolume.material) {
-				if (existingVolume.material.uniforms) {
-					// Dispose textures in uniforms if any
+			this.currentVisuals.remove(existingVolume); // Remove from scene
+			existingVolume.traverse((object) => {
+				// Traverse all children
+				if (object.isMesh) {
+					if (object.geometry) {
+						object.geometry.dispose();
+					}
+					// Material is shared and created new each time, so no need to dispose here.
 				}
-				existingVolume.material.dispose();
-			}
+			});
 		}
 
 		const hsvShaderMaterial = new THREE.ShaderMaterial({
@@ -201,55 +203,102 @@ export class HSVColorSpace extends ColorSpace {
 				vMax: { value: limits.v && typeof limits.v.max === 'number' ? limits.v.max : 1 },
 			},
 			side: THREE.DoubleSide,
-			transparent: true, // if opacity < 1 in gl_FragColor
+			transparent: true,
 		});
 
-		// Geometry for the subspace volume: a cylinder segment
-		// Assuming limits are now nested: limits.h.min, limits.s.max etc.
-		const hMin = limits.h && typeof limits.h.min === 'number' ? limits.h.min : 0;
-		const hMax = limits.h && typeof limits.h.max === 'number' ? limits.h.max : 360;
-		const sMin = limits.s && typeof limits.s.min === 'number' ? limits.s.min : 0; // sMin for HSV is often 0 for the full cone/cylinder base
+		const hMinDeg = limits.h && typeof limits.h.min === 'number' ? limits.h.min : 0;
+		const hMaxDeg = limits.h && typeof limits.h.max === 'number' ? limits.h.max : 360;
+		const sMin = limits.s && typeof limits.s.min === 'number' ? limits.s.min : 0;
 		const sMax = limits.s && typeof limits.s.max === 'number' ? limits.s.max : 1;
 		const vMin = limits.v && typeof limits.v.min === 'number' ? limits.v.min : 0;
 		const vMax = limits.v && typeof limits.v.max === 'number' ? limits.v.max : 1;
 
-		if (!limits || !limits.h || !limits.s || !limits.v) {
-			console.warn('HSV limits structure not fully defined. Using defaults for missing parts.');
-		}
-
-		// Radius is sMax, height is vMax-vMin, angle is hMax-hMin
-		// ThetaStart is hMin. Cylinder is built around Y axis.
-		const radius = sMax;
 		const height = vMax - vMin;
-		let thetaStartRad = THREE.MathUtils.degToRad(hMin);
-		let thetaLengthRad = THREE.MathUtils.degToRad(hMax - hMin);
+		// Use full circle for geometry, shader handles hue clipping
+		const thetaStartRad = 0;
+		const thetaLengthRad = Math.PI * 2;
 
-		thetaStartRad = 0;
-		thetaLengthRad = Math.PI * 2;
+		const volumeMeshGroup = new THREE.Group();
+		volumeMeshGroup.name = 'subspaceVolume';
 
-		if (height <= 0 || radius <= 0 || thetaLengthRad <= 0) {
-			console.log('HSV subspace volume is zero or invalid, not rendering.');
-			return; // Avoid creating empty geometry
+		const cylinderRadialSegments = 64;
+		const cylinderHeightSegments = 1; // Shader handles V segments
+
+		// Outer cylinder
+		if (height > 0.001 && sMax > 0.001) {
+			const openEndedOuter = sMin > 0.0001 && sMin < sMax;
+			const outerCylinderGeometry = new THREE.CylinderGeometry(
+				sMax, // radiusTop
+				sMax, // radiusBottom
+				height,
+				cylinderRadialSegments,
+				cylinderHeightSegments,
+				openEndedOuter,
+				thetaStartRad,
+				thetaLengthRad
+			);
+			outerCylinderGeometry.translate(0, vMin + height / 2, 0);
+			const outerCylinderMesh = new THREE.Mesh(outerCylinderGeometry, hsvShaderMaterial);
+			volumeMeshGroup.add(outerCylinderMesh);
 		}
 
-		const subSpaceGeometry = new THREE.CylinderGeometry(
-			radius, // radiusTop
-			radius, // radiusBottom
-			height, // height
-			64, // radialSegments (more for smoother curve)
-			8, // heightSegments
-			false, // openEnded
-			thetaStartRad, // thetaStart
-			thetaLengthRad // thetaLength
-		);
-		// The geometry's local Y goes from -height/2 to +height/2.
-		// We need its local Y to correspond to V values from vMin to vMax.
-		// So, translate it up by vMin + height/2.
-		subSpaceGeometry.translate(0, vMin + height / 2, 0);
+		// Inner cylinder and Ring caps (only if sMin > 0 and creates a valid tube)
+		if (sMin > 0.0001 && sMin < sMax && height > 0.001) {
+			// Inner cylinder
+			const innerCylinderGeometry = new THREE.CylinderGeometry(
+				sMin, // radiusTop
+				sMin, // radiusBottom
+				height,
+				cylinderRadialSegments,
+				cylinderHeightSegments,
+				true, // Always openEnded for the inner tube
+				thetaStartRad,
+				thetaLengthRad
+			);
+			innerCylinderGeometry.translate(0, vMin + height / 2, 0);
+			const innerCylinderMesh = new THREE.Mesh(innerCylinderGeometry, hsvShaderMaterial);
+			volumeMeshGroup.add(innerCylinderMesh);
 
-		const subSpaceMesh = new THREE.Mesh(subSpaceGeometry, hsvShaderMaterial);
-		subSpaceMesh.name = 'subspaceVolume';
-		this.currentVisuals.add(subSpaceMesh);
-		console.log('HSV SubSpace Volume updated/created.');
+			// Ring caps
+			const ringThetaSegments = cylinderRadialSegments;
+			const ringPhiSegments = 1;
+
+			// Bottom Ring
+			const bottomRingGeometry = new THREE.RingGeometry(
+				sMin, // innerRadius
+				sMax, // outerRadius
+				ringThetaSegments,
+				ringPhiSegments,
+				thetaStartRad,
+				thetaLengthRad
+			);
+			bottomRingGeometry.rotateX(-Math.PI / 2); // Orient it flat on XZ plane
+			bottomRingGeometry.translate(0, vMin, 0); // Position it at the bottom
+			const bottomRingMesh = new THREE.Mesh(bottomRingGeometry, hsvShaderMaterial);
+			volumeMeshGroup.add(bottomRingMesh);
+
+			// Top Ring
+			const topRingGeometry = new THREE.RingGeometry(
+				sMin, // innerRadius
+				sMax, // outerRadius
+				ringThetaSegments,
+				ringPhiSegments,
+				thetaStartRad,
+				thetaLengthRad
+			);
+			topRingGeometry.rotateX(-Math.PI / 2); // Orient it flat on XZ plane
+			topRingGeometry.translate(0, vMax, 0); // Position it at the top
+			const topRingMesh = new THREE.Mesh(topRingGeometry, hsvShaderMaterial);
+			volumeMeshGroup.add(topRingMesh);
+		}
+
+		if (volumeMeshGroup.children.length === 0) {
+			console.log('HSV subspace volume is zero or invalid, not rendering.');
+			hsvShaderMaterial.dispose(); // Dispose the material if no meshes were created
+			return;
+		}
+
+		this.currentVisuals.add(volumeMeshGroup);
+		console.log('HSV SubSpace Volume updated and added to scene.');
 	}
 }
