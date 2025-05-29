@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { RGBColorSpace } from './RGBColorSpace.js';
+import { CMYColorSpace } from './CMYColorSpace.js';
+// Import other color spaces like HSVColorSpace, HSLColorSpace later
 
 export class SceneManager {
     constructor(scene, camera, renderer, controls) {
@@ -7,57 +10,85 @@ export class SceneManager {
         this.renderer = renderer;
         this.controls = controls; // OrbitControls instance
 
-        this.colorSpace = null; // Will be set by main.js or UIManager
         this.uiManager = null;  // Will be set by main.js or UIManager
-
-        this.currentModel = ''; // To keep track of the current color model
-
-        // Scene setup is now minimal here, main.js handles basic lights.
-        // ColorSpace will handle its specific visuals (axes, outlines, etc.)
-        // const axes = new THREE.AxesHelper(1); // Optional: for dev, to see scene orientation
-        // this.scene.add(axes);
+        this.activeColorSpace = null; // Will hold the current ColorSpace instance (e.g., RGBColorSpace)
+        this.currentModelType = ''; // To keep track of the current color model string ('RGB', 'CMY', etc.)
 
         console.log('SceneManager initialized');
     }
 
-    // Method to be called from main.js or UIManager to link instances
-    setDependencies(colorSpace, uiManager) {
-        this.colorSpace = colorSpace;
+    // Method to be called from main.js or UIManager to link UIManager
+    setUIManager(uiManager) {
         this.uiManager = uiManager;
-        console.log('SceneManager dependencies set.');
+        console.log('SceneManager UIManager dependency set.');
     }
 
-    setModel(modelType) {
+    setColorModel(modelType) {
         console.log(`SceneManager: Setting model to ${modelType}`);
-        this.currentModel = modelType;
-        if (this.colorSpace) {
-            // UIManager will provide the initial limits for the new model
-            // For now, let's assume UIManager handles getting those limits
-            // const initialLimits = this.uiManager.getInitialLimitsForModel(modelType);
-            // this.colorSpace.displaySpace(modelType, initialLimits);
-            console.log('SceneManager: Would call colorSpace.displaySpace() here.');
-        } else {
-            console.error('ColorSpace not set in SceneManager');
+        if (this.currentModelType === modelType && this.activeColorSpace) {
+            console.log(`Model ${modelType} is already active.`);
+            // Optionally, force a redisplay if needed, or just ensure UI is synced
+            // this.activeColorSpace.display(this.uiManager.getCurrentLimits()); 
+            return;
         }
-        // Inform UIManager to update UI elements (e.g., reset sliders, visibility)
-        // if (this.uiManager) {
-        //     this.uiManager.onModelChanged(modelType);
-        // }
+
+        // Dispose of the old color space visuals if one exists
+        if (this.activeColorSpace) {
+            this.activeColorSpace.dispose();
+            this.activeColorSpace = null;
+        }
+
+        this.currentModelType = modelType;
+
+        // Step 1: Tell UIManager to update its internal state for the new model and reset its sliders
+        if (this.uiManager && typeof this.uiManager.setCurrentModelAndResetLimits === 'function') {
+            this.uiManager.setCurrentModelAndResetLimits(modelType);
+        } else {
+            console.error('UIManager or setCurrentModelAndResetLimits method is not available.');
+            return; // Critical error, cannot proceed
+        }
+
+        // Step 2: Now that UIManager has updated its state and reset its limits, get those new default limits
+        const initialLimits = this.uiManager.getCurrentLimits();
+
+        switch (modelType) {
+            case 'RGB':
+                this.activeColorSpace = new RGBColorSpace(this.scene);
+                break;
+            case 'CMY':
+                this.activeColorSpace = new CMYColorSpace(this.scene);
+                break;
+            // Add cases for 'HSV', 'HSL' later
+            default:
+                console.error(`Unsupported color model type: ${modelType}`);
+                return;
+        }
+
+        if (this.activeColorSpace) {
+            console.log(`SceneManager: Created new ${this.activeColorSpace.constructor.name}`);
+            this.activeColorSpace.display(initialLimits);
+            // UIManager should have already been updated by its own model change handler
+            // to show correct sliders and values. Now, ensure camera is adjusted.
+            this.fitCameraToCurrentSpace(); 
+        } else {
+            console.error(`Failed to create color space for model: ${modelType}`);
+        }
     }
 
     updateColorSubspace(limits) {
-        console.log('SceneManager: Updating color subspace with limits:', limits);
-        if (this.colorSpace && this.currentModel) {
-            this.colorSpace.updateSubSpaceVolume(this.currentModel, limits);
+        // This method is called when sliders change values
+        console.log(`SceneManager: Updating color subspace for ${this.currentModelType} with limits:`, limits);
+        if (this.activeColorSpace) {
+            this.activeColorSpace.refreshSubSpaceVolume(limits);
         } else {
-            console.error('ColorSpace or currentModel not set in SceneManager');
+            console.error('No active ColorSpace to update subspace volume.');
         }
     }
 
     fitCameraToCurrentSpace() {
         console.log('SceneManager: Adjusting camera to fit current space');
-        if (this.colorSpace) {
-            const boundingBox = this.colorSpace.getCurrentSpaceBoundingBox();
+        if (this.activeColorSpace) {
+            const boundingBox = this.activeColorSpace.getCurrentSpaceBoundingBox();
             if (boundingBox) {
                 const center = new THREE.Vector3();
                 boundingBox.getCenter(center);
@@ -65,14 +96,23 @@ export class SceneManager {
                 const size = new THREE.Vector3();
                 boundingBox.getSize(size);
 
+                // Handle cases where the bounding box might be empty or invalid
+                if (size.x === 0 && size.y === 0 && size.z === 0) {
+                    console.warn('Bounding box is empty. Cannot fit camera.');
+                    // Optionally, set a default view or leave camera as is
+                    this.controls.target.copy(new THREE.Vector3(0.5, 0.5, 0.5)); // Default center
+                    this.camera.position.set(2, 2, 2); // Default position
+                    this.camera.lookAt(this.controls.target);
+                    this.controls.update();
+                    return;
+                }
+
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = this.camera.fov * (Math.PI / 180);
                 let distance = Math.abs(maxDim / 2 / Math.tan(fov / 2));
                 
-                // Add some padding so the object isn't edge-to-edge
-                distance *= 2.5; // Increased multiplier for more distance 
+                distance *= 2.5; // Padding factor
 
-                // Position the camera along the (1,1,1) vector from the center
                 const offsetDirection = new THREE.Vector3(1, 1, 1).normalize();
                 this.camera.position.copy(center).addScaledVector(offsetDirection, distance);
                 this.controls.target.copy(center);
@@ -81,15 +121,14 @@ export class SceneManager {
                 this.camera.updateProjectionMatrix();
                 console.log('SceneManager: Camera adjusted.');
             } else {
-                console.error('Could not get bounding box from ColorSpace.');
+                console.error('Could not get bounding box from active ColorSpace.');
             }
         } else {
-            console.error('ColorSpace not set in SceneManager for fitCameraToCurrentSpace.');
+            console.error('No active ColorSpace for fitCameraToCurrentSpace.');
         }
     }
 
     animate() {
-        // This method can be used for animations managed by SceneManager itself.
         // For now, it's empty as OrbitControls.update() is in main.js's animate loop.
     }
 }

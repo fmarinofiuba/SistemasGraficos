@@ -3,10 +3,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { SceneManager } from './sceneManager.js';
 import { UIManager } from './UIManager.js';
-import { ColorSpace } from './ColorSpace.js';
+// ColorSpace base class is imported by its subclasses (RGBColorSpace, CMYColorSpace, etc.)
+// So, no direct import of ColorSpace here unless used for type checking, which is not the case now.
 
 let scene, camera, renderer, container;
-let sceneManager, uiManager, colorSpace, controls; // Added uiManager, colorSpace, and made controls accessible
+let sceneManager, uiManager, controls; // colorSpace instance removed from here
 
 function setupThreeJs() {
 	container = document.getElementById('container3D');
@@ -64,43 +65,30 @@ function animate() {
 setupThreeJs();
 
 // Instantiate managers
-// SceneManager will be updated to accept camera and renderer for functionalities like 'fitCameraToCurrentSpace'
 sceneManager = new SceneManager(scene, camera, renderer, controls);
-colorSpace = new ColorSpace(scene);
-uiManager = new UIManager(sceneManager, colorSpace); // UIManager's constructor will call its initUI
-sceneManager.setDependencies(colorSpace, uiManager); // Set dependencies after all are instantiated
+uiManager = new UIManager(sceneManager); // UIManager now only takes sceneManager
 
-// Initial display call will be triggered by UIManager.initUI() -> sceneManager.setModel()
-// For now, we can manually trigger the first display if UIManager isn't doing it yet.
-// Initial display call will be triggered by UIManager's initUI, which should call sceneManager.setModel()
-// For now, let's explicitly call it to see something on screen if UIManager.initUI is not yet complete.
-if (uiManager.currentModel && uiManager.limits) {
-	// Extract the limits for the current model. For RGB, it's { rMin, rMax, ... }
-	// For HSV, it's { hMin, hMax, ... }. UIManager stores them flat, so we need to pick.
-	let currentLimits = {};
-	if (uiManager.currentModel === 'RGB') {
-		currentLimits = {
-			rMin: uiManager.limits.rMin,
-			rMax: uiManager.limits.rMax,
-			gMin: uiManager.limits.gMin,
-			gMax: uiManager.limits.gMax,
-			bMin: uiManager.limits.bMin,
-			bMax: uiManager.limits.bMax,
-		};
-	}
-	// Add similar blocks for CMY, HSV, HSL as they are implemented
+// Set UIManager dependency in SceneManager
+sceneManager.setUIManager(uiManager);
 
-	// Ensure colorSpace.displaySpace is called to render the initial model
-	// This will eventually be driven by UIManager interactions.
-	colorSpace.displaySpace(uiManager.currentModel, currentLimits);
-	sceneManager.setModel(uiManager.currentModel); // Also inform SceneManager about the current model
-	sceneManager.fitCameraToCurrentSpace(); // Adjust camera to the default space
+// UIManager's constructor calls initUI().
+// initUI sets up the model selector, which defaults to 'RGB'.
+// The onChange handler of the model selector (even on init if it triggers) 
+// should call sceneManager.setModel(this.currentModel).
+// Let's ensure the initial model is set explicitly after UIManager is ready.
+if (uiManager.currentModel) {
+    sceneManager.setColorModel(uiManager.currentModel); 
+    // fitCameraToCurrentSpace is now called within sceneManager.setColorModel
+} else {
+    console.error("UIManager did not initialize currentModel correctly.");
+    // Fallback to RGB if something went wrong with UIManager's default model
+    sceneManager.setColorModel('RGB');
 }
 
 animate();
 
 // Add a console log to confirm main.js has run and initialized managers
-console.log('main.js executed: Scene, Managers, and ColorSpace initialized.');
+console.log('main.js executed: Scene and Managers initialized.');
 console.log('UIManager instance:', uiManager);
 console.log('SceneManager instance:', sceneManager);
-console.log('ColorSpace instance:', colorSpace);
+// console.log('ColorSpace instance:', colorSpace); // colorSpace instance is no longer directly managed here

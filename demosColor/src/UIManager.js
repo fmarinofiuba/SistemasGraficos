@@ -2,9 +2,9 @@
 import GUI from 'lil-gui';
 
 export class UIManager {
-    constructor(sceneManager, colorSpace) {
+    constructor(sceneManager) { // colorSpace parameter removed
         this.sceneManager = sceneManager;
-        this.colorSpace = colorSpace;
+        // this.colorSpace = colorSpace; // Removed, SceneManager handles active ColorSpace instance
         this.gui = new GUI();
         this.limits = {
             // RGB
@@ -47,12 +47,9 @@ export class UIManager {
     setupModelSelector() {
         const modelOptions = { 'RGB': 'RGB', 'CMY': 'CMY', 'HSV': 'HSV', 'HSL': 'HSL' };
         this.gui.add(this, 'currentModel', modelOptions).name('Modelo de Color').onChange(model => {
-            console.log('Modelo cambiado a:', model);
-            this.sceneManager.setModel(model);
-            this.resetLimitsToDefault(model); // Reset sliders to full range for the new model
-            this.updateLimitsFolderVisibility();
-            // Trigger a redraw with new model and full limits
-            this.notifySubspaceChange(); 
+            console.log('UIManager: Model selector changed to:', model);
+            // SceneManager will coordinate the rest, including telling UIManager to update its state.
+            this.sceneManager.setColorModel(model); 
         });
     }
 
@@ -153,13 +150,23 @@ export class UIManager {
     notifySubspaceChange() {
         const limits = this.getCurrentLimits();
         this.sceneManager.updateColorSubspace(limits);
-        // This will also trigger colorSpace.displaySpace indirectly if model changed, or updateSubSpaceVolume directly
-        this.colorSpace.displaySpace(this.currentModel, limits); // Ensure the displaySpace is called with the correct, filtered limits
-
+        // The line below was removed. 
+        // sceneManager.updateColorSubspace now calls refreshSubSpaceVolume on the active ColorSpace instance.
+        // If the model changed, sceneManager.setModel would have already called display() on the new space.
+        // this.colorSpace.displaySpace(this.currentModel, limits); 
     }
 
     // Debounce implementation
     debounceTimeout = null;
+    setCurrentModelAndResetLimits(modelType) {
+        console.log(`UIManager: Setting current model to ${modelType} and resetting limits.`);
+        this.currentModel = modelType; // Ensure this.currentModel is updated before getCurrentLimits is called indirectly
+        this.resetLimitsToDefault(modelType);
+        this.updateLimitsFolderVisibility();
+        // Notify that the subspace should be updated with these new default limits
+        this.notifySubspaceChange(); 
+    }
+
     notifySubspaceChangeWithDebounce() {
         clearTimeout(this.debounceTimeout);
         this.debounceTimeout = setTimeout(() => {
