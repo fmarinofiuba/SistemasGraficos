@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-export const TUBE_RADIUS = 0.005; // Diameter would be 0.02
+export const TUBE_RADIUS = 0.003; // Diameter would be 0.02
 export const TUBE_RADIAL_SEGMENTS = 8; // 4 might be too blocky, 8 is a good compromise
 export const TUBE_TUBULAR_SEGMENTS = 1; // For straight lines, 1 segment is enough
 

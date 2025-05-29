@@ -212,6 +212,9 @@ export class HSLColorSpace extends ColorSpace {
 		// Calculate actual radius at L=0.5 based on s_max_limit
 		const currentMaxRadius = maxVisualRadiusAtMid * s_max_limit;
 
+		const fullCircle = Math.abs(h_length_rad - 2.0 * Math.PI) < 0.001;
+		const h_end_rad = h_min_rad + h_length_rad;
+
 		// Lower part (cone/cylinder segment)
 		if (l_min < l_midPoint) {
 			const heightLower = Math.min(l_midPoint, l_max) - l_min;
@@ -237,6 +240,79 @@ export class HSLColorSpace extends ColorSpace {
 				// Shader expects L to range from 0 to 1 across the entire double cone height (0 to 1 in world Y)
 				// The vertex shader's v_hsl.z (l) is calculated based on world Y, so this direct positioning is okay.
 				volumeMeshGroup.add(lowerMesh);
+
+				if (!fullCircle && heightLower > 0.001) {
+					const y_bottom_l = l_min;
+					const y_top_l = l_min + heightLower;
+					const r_bottom_l = radiusAtLMin;
+					const r_top_l = radiusAtLMidOrLMax;
+
+					// Side cap 1 (at h_min_rad) for lower segment
+					let p0 = new THREE.Vector3(0, y_bottom_l, 0);
+					let p1 = new THREE.Vector3(
+						r_bottom_l * Math.sin(h_min_rad),
+						y_bottom_l,
+						r_bottom_l * Math.cos(h_min_rad)
+					);
+					let p2 = new THREE.Vector3(r_top_l * Math.cos(h_min_rad), y_top_l, r_top_l * Math.sin(h_min_rad));
+					let p3 = new THREE.Vector3(0, y_top_l, 0);
+					const cap1LowerGeom = new THREE.BufferGeometry();
+					const vertices1Lower = new Float32Array([
+						p0.x,
+						p0.y,
+						p0.z,
+						p1.x,
+						p1.y,
+						p1.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p0.x,
+						p0.y,
+						p0.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p3.x,
+						p3.y,
+						p3.z,
+					]);
+					cap1LowerGeom.setAttribute('position', new THREE.BufferAttribute(vertices1Lower, 3));
+					const cap1LowerMesh = new THREE.Mesh(cap1LowerGeom, shaderMaterial);
+					volumeMeshGroup.add(cap1LowerMesh);
+
+					// Side cap 2 (at h_end_rad) for lower segment
+					p1 = new THREE.Vector3(
+						r_bottom_l * Math.sin(h_end_rad),
+						y_bottom_l,
+						r_bottom_l * Math.cos(h_end_rad)
+					);
+					p2 = new THREE.Vector3(r_top_l * Math.cos(h_end_rad), y_top_l, r_top_l * Math.sin(h_end_rad));
+					const cap2LowerGeom = new THREE.BufferGeometry();
+					const vertices2Lower = new Float32Array([
+						p0.x,
+						p0.y,
+						p0.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p1.x,
+						p1.y,
+						p1.z, // Reversed for outward face
+						p0.x,
+						p0.y,
+						p0.z,
+						p3.x,
+						p3.y,
+						p3.z,
+						p2.x,
+						p2.y,
+						p2.z, // Reversed for outward face
+					]);
+					cap2LowerGeom.setAttribute('position', new THREE.BufferAttribute(vertices2Lower, 3));
+					const cap2LowerMesh = new THREE.Mesh(cap2LowerGeom, shaderMaterial);
+					volumeMeshGroup.add(cap2LowerMesh);
+				}
 			}
 		}
 
@@ -264,6 +340,79 @@ export class HSLColorSpace extends ColorSpace {
 				const upperMesh = new THREE.Mesh(upperGeometry, shaderMaterial);
 				upperMesh.position.set(0, Math.max(l_midPoint, l_min) + heightUpper / 2, 0);
 				volumeMeshGroup.add(upperMesh);
+
+				if (!fullCircle && heightUpper > 0.001) {
+					const y_bottom_u = Math.max(l_midPoint, l_min);
+					const y_top_u = l_max;
+					const r_bottom_u = radiusAtLMidOrLMin;
+					const r_top_u = radiusAtLMax;
+
+					// Side cap 1 (at h_min_rad) for upper segment
+					let p0 = new THREE.Vector3(0, y_bottom_u, 0);
+					let p1 = new THREE.Vector3(
+						r_bottom_u * Math.cos(h_min_rad),
+						y_bottom_u,
+						r_bottom_u * Math.sin(h_min_rad)
+					);
+					let p2 = new THREE.Vector3(r_top_u * Math.cos(h_min_rad), y_top_u, r_top_u * Math.sin(h_min_rad));
+					let p3 = new THREE.Vector3(0, y_top_u, 0);
+					const cap1UpperGeom = new THREE.BufferGeometry();
+					const vertices1Upper = new Float32Array([
+						p0.x,
+						p0.y,
+						p0.z,
+						p1.x,
+						p1.y,
+						p1.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p0.x,
+						p0.y,
+						p0.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p3.x,
+						p3.y,
+						p3.z,
+					]);
+					cap1UpperGeom.setAttribute('position', new THREE.BufferAttribute(vertices1Upper, 3));
+					const cap1UpperMesh = new THREE.Mesh(cap1UpperGeom, shaderMaterial);
+					volumeMeshGroup.add(cap1UpperMesh);
+
+					// Side cap 2 (at h_end_rad) for upper segment
+					p1 = new THREE.Vector3(
+						r_bottom_u * Math.cos(h_end_rad),
+						y_bottom_u,
+						r_bottom_u * Math.sin(h_end_rad)
+					);
+					p2 = new THREE.Vector3(r_top_u * Math.cos(h_end_rad), y_top_u, r_top_u * Math.sin(h_end_rad));
+					const cap2UpperGeom = new THREE.BufferGeometry();
+					const vertices2Upper = new Float32Array([
+						p0.x,
+						p0.y,
+						p0.z,
+						p2.x,
+						p2.y,
+						p2.z,
+						p1.x,
+						p1.y,
+						p1.z, // Reversed for outward face
+						p0.x,
+						p0.y,
+						p0.z,
+						p3.x,
+						p3.y,
+						p3.z,
+						p2.x,
+						p2.y,
+						p2.z, // Reversed for outward face
+					]);
+					cap2UpperGeom.setAttribute('position', new THREE.BufferAttribute(vertices2Upper, 3));
+					const cap2UpperMesh = new THREE.Mesh(cap2UpperGeom, shaderMaterial);
+					volumeMeshGroup.add(cap2UpperMesh);
+				}
 			}
 		}
 
