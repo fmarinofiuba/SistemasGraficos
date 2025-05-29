@@ -45,7 +45,7 @@ void main() {
     if (v_hsl.x < h_min || v_hsl.x > h_max ||
         v_hsl.y < s_min || v_hsl.y > s_max ||
         v_hsl.z < l_min || v_hsl.z > l_max) {
-        discard;
+        //discard;
     }
 
     // Convert HSL to RGB for display
