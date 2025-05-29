@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
+import { createTubesFromEdges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
 import hslVertexShader from './shaders/hsl/hslVertex.glsl';
 import hslFragmentShader from './shaders/hsl/hslFragment.glsl';
 
@@ -42,31 +43,47 @@ export class HSLColorSpace extends ColorSpace {
     }
 
     _buildFullSpaceOutlineObject() {
-        console.log('HSLColorSpace: Building full space outline (double cone)');
-        const objectGroup = new THREE.Group();
-        const radius = 0.5;
-        const heightCone = 0.5;
-        const radialSegments = 32;
-        const heightSegments = 4;
-        const coneMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+        console.log('HSLColorSpace: Building full space outline with tubes (double cone)');
+        const edges = [];
+        const outlineRadius = 0.5; // Radius of the central ring at L=0.5
+        const centralRingY = 0.5;  // Y-coordinate of the central ring
+        const numSegments = 16;    // Number of segments for the central ring and cone generators
 
-        // Bottom Cone: Tip at Y_world=0, Base at Y_world=0.5. Points DOWN.
-        const bottomOutlineGeom = new THREE.ConeGeometry(radius, heightCone, radialSegments, heightSegments, true);
-        bottomOutlineGeom.translate(0, -heightCone / 2, 0); // Tip to local origin
-        const bottomOutlineCone = new THREE.LineSegments(new THREE.EdgesGeometry(bottomOutlineGeom), coneMaterial);
-        bottomOutlineCone.rotation.x = Math.PI;
-        bottomOutlineCone.position.set(0, 0, 0); // Tip is at world origin
-        objectGroup.add(bottomOutlineCone);
+        const bottomTip = new THREE.Vector3(0, 0, 0);
+        const topTip = new THREE.Vector3(0, 1, 0);
 
-        // Top Cone: Tip at Y_world=1, Base at Y_world=0.5. Points UP.
-        const topOutlineGeom = new THREE.ConeGeometry(radius, heightCone, radialSegments, heightSegments, true);
-        topOutlineGeom.translate(0, heightCone / 2, 0); // Base to local origin
-        const topOutlineCone = new THREE.LineSegments(new THREE.EdgesGeometry(topOutlineGeom), coneMaterial);
-        topOutlineCone.position.set(0, 0.5, 0); // Base is at Y_world=0.5
-        objectGroup.add(topOutlineCone);
-        
-        objectGroup.name = "hslFullSpaceOutline";
-        return objectGroup;
+        const centralRingPoints = [];
+        for (let i = 0; i < numSegments; i++) {
+            const angle = (i / numSegments) * Math.PI * 2;
+            const x = outlineRadius * Math.cos(angle);
+            const z = outlineRadius * Math.sin(angle);
+            centralRingPoints.push(new THREE.Vector3(x, centralRingY, z));
+        }
+
+        // Edges for the central ring
+        for (let i = 0; i < numSegments; i++) {
+            edges.push({ start: centralRingPoints[i], end: centralRingPoints[(i + 1) % numSegments] });
+        }
+
+        // Edges connecting central ring to bottom tip and top tip
+        for (let i = 0; i < numSegments; i++) {
+            edges.push({ start: centralRingPoints[i], end: bottomTip });
+            edges.push({ start: centralRingPoints[i], end: topTip });
+        }
+
+        const tubeGeometry = createTubesFromEdges(edges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS);
+
+        if (!tubeGeometry) {
+            console.warn('HSLColorSpace: Tube geometry for outline could not be created.');
+            const group = new THREE.Group();
+            group.name = "hslFullSpaceOutline";
+            return group; // Return an empty group
+        }
+
+        const tubeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const outlineObject = new THREE.Mesh(tubeGeometry, tubeMaterial);
+        outlineObject.name = "hslFullSpaceOutline";
+        return outlineObject;
     }
 
     _updateSubSpaceVolume(limits) {

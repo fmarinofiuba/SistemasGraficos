@@ -73,16 +73,16 @@ sceneManager.setUIManager(uiManager);
 
 // UIManager's constructor calls initUI().
 // initUI sets up the model selector, which defaults to 'RGB'.
-// The onChange handler of the model selector (even on init if it triggers) 
+// The onChange handler of the model selector (even on init if it triggers)
 // should call sceneManager.setModel(this.currentModel).
 // Let's ensure the initial model is set explicitly after UIManager is ready.
 if (uiManager.currentModel) {
-    sceneManager.setColorModel(uiManager.currentModel); 
-    // fitCameraToCurrentSpace is now called within sceneManager.setColorModel
+	sceneManager.setColorModel(uiManager.currentModel);
+	// fitCameraToCurrentSpace is now called within sceneManager.setColorModel
 } else {
-    console.error("UIManager did not initialize currentModel correctly.");
-    // Fallback to RGB if something went wrong with UIManager's default model
-    sceneManager.setColorModel('RGB');
+	console.error('UIManager did not initialize currentModel correctly.');
+	// Fallback to RGB if something went wrong with UIManager's default model
+	sceneManager.setColorModel('HSV');
 }
 
 animate();
