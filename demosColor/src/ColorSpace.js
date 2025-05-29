@@ -66,6 +66,30 @@ export class ColorSpace {
             this.currentVisuals.add(this.makeTextSprite("R", { x: axisLength + 0.1, y: 0, z: 0 }));
             this.currentVisuals.add(this.makeTextSprite("G", { x: 0, y: axisLength + 0.1, z: 0 }));
             this.currentVisuals.add(this.makeTextSprite("B", { x: 0, y: 0, z: axisLength + 0.1 }));
+        } else if (modelType === 'CMY') {
+            const axisLength = 1.2;
+            const C_axisMaterial = new THREE.LineBasicMaterial({ color: 0x00FFFF }); // Cyan
+            const M_axisMaterial = new THREE.LineBasicMaterial({ color: 0xFF00FF }); // Magenta
+            const Y_axisMaterial = new THREE.LineBasicMaterial({ color: 0xFFFF00 }); // Yellow
+
+            const pointsC = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(axisLength, 0, 0)];
+            const pointsM = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisLength, 0)];
+            const pointsY = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, axisLength)];
+
+            const C_geometry = new THREE.BufferGeometry().setFromPoints(pointsC);
+            const M_geometry = new THREE.BufferGeometry().setFromPoints(pointsM);
+            const Y_geometry = new THREE.BufferGeometry().setFromPoints(pointsY);
+
+            const C_axis = new THREE.Line(C_geometry, C_axisMaterial);
+            const M_axis = new THREE.Line(M_geometry, M_axisMaterial);
+            const Y_axis = new THREE.Line(Y_geometry, Y_axisMaterial);
+
+            this.currentVisuals.add(C_axis, M_axis, Y_axis);
+
+            // Labels
+            this.currentVisuals.add(this.makeTextSprite("C", { x: axisLength + 0.1, y: 0, z: 0 }));
+            this.currentVisuals.add(this.makeTextSprite("M", { x: 0, y: axisLength + 0.1, z: 0 }));
+            this.currentVisuals.add(this.makeTextSprite("Y", { x: 0, y: 0, z: axisLength + 0.1 }));
         }
         // Add cases for CMY, HSV, HSL later
     }
@@ -118,8 +142,14 @@ export class ColorSpace {
             const material = new THREE.LineBasicMaterial({ color: 0xffffff });
             outlineObject = new THREE.LineSegments(edges, material);
             outlineObject.position.set(0.5, 0.5, 0.5); // Center the 1x1x1 cube around (0.5,0.5,0.5) if origin is (0,0,0)
+        } else if (modelType === 'CMY') {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const edges = new THREE.EdgesGeometry(geometry);
+            const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+            outlineObject = new THREE.LineSegments(edges, material);
+            outlineObject.position.set(0.5, 0.5, 0.5); // Center the 1x1x1 cube around (0.5,0.5,0.5) if origin is (0,0,0)
         }
-        // Add cases for CMY, HSV, HSL later
+        // Add cases for HSV, HSL later
         return outlineObject;
     }
 
@@ -198,26 +228,86 @@ export class ColorSpace {
                 }
             `;
 
-            const subBoxMat = new THREE.ShaderMaterial({
-                vertexShader,
-                fragmentShader,
+            const rgbShaderMaterial = new THREE.ShaderMaterial({
                 uniforms: {
-                    u_rMin: { value: limits.rMin },
-                    u_rMax: { value: limits.rMax },
-                    u_gMin: { value: limits.gMin },
-                    u_gMax: { value: limits.gMax },
-                    u_bMin: { value: limits.bMin },
-                    u_bMax: { value: limits.bMax },
+                    u_rMin: { value: limits.rMin }, u_rMax: { value: limits.rMax },
+                    u_gMin: { value: limits.gMin }, u_gMax: { value: limits.gMax },
+                    u_bMin: { value: limits.bMin }, u_bMax: { value: limits.bMax },
                 },
-                side: THREE.DoubleSide, // Render both sides
-                // transparent: true, // If opacity is needed
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
             });
 
-            const subBoxMesh = new THREE.Mesh(subBoxGeo, subBoxMat);
-            subBoxMesh.name = 'subspaceVolume';
-            this.currentVisuals.add(subBoxMesh);
+            const subBoxMeshRGB = new THREE.Mesh(subBoxGeo, rgbShaderMaterial);
+            subBoxMeshRGB.name = 'subspaceVolume';
+            this.currentVisuals.add(subBoxMeshRGB);
+        } else if (modelType === 'CMY') {
+            if (!limits || typeof limits.cMin === 'undefined') {
+                console.warn('CMY limits not fully defined for subspace volume. Using defaults.');
+                limits = { cMin: 0, cMax: 1, mMin: 0, mMax: 1, yMin: 0, yMax: 1, ...limits }; 
+            }
+
+            const width = limits.cMax - limits.cMin;
+            const height = limits.mMax - limits.mMin;
+            const depth = limits.yMax - limits.yMin;
+
+            if (width <= 0 || height <= 0 || depth <= 0) {
+                console.log('Subspace volume has zero or negative dimension, not rendering.');
+                return;
+            }
+
+            const subBoxGeo = new THREE.BoxGeometry(width, height, depth);
+            // Position the geometry so its corner is at (cMin, mMin, yMin)
+            subBoxGeo.translate(limits.cMin + width / 2, limits.mMin + height / 2, limits.yMin + depth / 2);
+
+            const cmyVertexShader = `
+                varying vec3 vLocalPosition;
+                void main() {
+                    vLocalPosition = position;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `;
+
+            const cmyFragmentShader = `
+                varying vec3 vLocalPosition;
+                uniform float u_cMin, u_cMax, u_mMin, u_mMax, u_yMin, u_yMax;
+
+                void main() {
+                    // vLocalPosition is the world position of the fragment within the sub-box's bounds.
+                    float c = (vLocalPosition.x - u_cMin) / (u_cMax - u_cMin);
+                    float m = (vLocalPosition.y - u_mMin) / (u_mMax - u_mMin);
+                    float y = (vLocalPosition.z - u_yMin) / (u_yMax - u_yMin);
+                    
+                    // Convert CMY to RGB
+                    float r = 1.0 - c;
+                    float g = 1.0 - m;
+                    float b = 1.0 - y;
+
+                    gl_FragColor = vec4(r, g, b, 1.0);
+                }
+            `;
+
+            const cmyShaderMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    u_cMin: { value: limits.cMin }, u_cMax: { value: limits.cMax },
+                    u_mMin: { value: limits.mMin }, u_mMax: { value: limits.mMax },
+                    u_yMin: { value: limits.yMin }, u_yMax: { value: limits.yMax },
+                },
+                vertexShader: cmyVertexShader,
+                fragmentShader: cmyFragmentShader,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const subBoxMeshCMY = new THREE.Mesh(subBoxGeo, cmyShaderMaterial);
+            subBoxMeshCMY.name = 'subspaceVolume';
+            this.currentVisuals.add(subBoxMeshCMY);
         }
-        // Add cases for CMY, HSV, HSL later
+        // Add cases for HSV, HSL later
     }
 
     getCurrentSpaceBoundingBox() {
