@@ -4,12 +4,18 @@ import { createTubesFromEdges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './Geome
 import hslVertexShader from './shaders/hsl/hslVertex.glsl';
 import hslFragmentShader from './shaders/hsl/hslFragment.glsl';
 
+// Constants for HSL geometry
+const RADIAL_SEGMENTS = 64;
+const HEIGHT_SEGMENTS = 16;
+const L_MID_POINT = 0.5;
+const MAX_VISUAL_RADIUS_AT_MID = 0.5; // Visual radius of the HSL shape at L=0.5 when S=1
+
 export class HSLColorSpace extends ColorSpace {
 	constructor(scene) {
 		super(scene);
 		this.modelType = 'HSL';
 		this.subSpaceLimits = {
-			h: { min: 0, max: 1 },
+			h: { min: 0, max: 1 }, // Default to full hue range
 			s: { min: 0, max: 1 },
 			l: { min: 0, max: 1 },
 		};
@@ -149,14 +155,10 @@ export class HSLColorSpace extends ColorSpace {
 		console.log('HSL Outline (central ring) built');
 	}
 
-	_updateSubSpaceVolume(limits) {
-		console.log(`Updating HSL SubSpace Volume with limits:`, limits);
-
-		// Remove previous subspace volume if it exists
-		const existingVolumeGroup = this.currentVisuals.getObjectByName('subspaceVolume');
-		if (existingVolumeGroup) {
-			// Properly dispose of geometries and materials of children
-			existingVolumeGroup.traverse((child) => {
+	// Helper method to dispose of visuals and their resources
+	_disposeVisuals(object3D) {
+		if (object3D) {
+			object3D.traverse((child) => {
 				if (child.isMesh) {
 					if (child.geometry) {
 						child.geometry.dispose();
@@ -165,22 +167,98 @@ export class HSLColorSpace extends ColorSpace {
 						if (Array.isArray(child.material)) {
 							child.material.forEach((material) => material.dispose());
 						} else {
-							// Assuming the material is the ShaderMaterial created in the previous call
 							child.material.dispose();
 						}
 					}
 				}
 			});
-			this.currentVisuals.remove(existingVolumeGroup);
+			if (object3D.parent) {
+				object3D.parent.remove(object3D);
+			}
 		}
+	}
 
-		// For HSL, the subspace volume will be a double cone geometry,
-		// rendered with a shader that discards fragments outside the HSL limits.
-		const radius = 0.5;
-		const heightCone = 0.5; // Height of each individual cone
-		const radialSegments = 64; // Increased for smoother surface
-		const heightSegments = 16; // Increased for smoother surface
+	// Helper to calculate radius at a given L value and saturation scaling
+	_getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
+		let radius_at_s1;
+		if (l_value <= L_MID_POINT) {
+			radius_at_s1 = (l_value / L_MID_POINT) * MAX_VISUAL_RADIUS_AT_MID;
+		} else {
+			radius_at_s1 = ((1 - l_value) / (1 - L_MID_POINT)) * MAX_VISUAL_RADIUS_AT_MID;
+		}
+		return Math.max(0, radius_at_s1 * s_value_for_radius_scaling);
+	}
 
+	// Helper to create cylinder segment for HSL shape
+	_createHslCylinderSegmentMesh(params, material) {
+		const geometry = new THREE.CylinderGeometry(
+			params.radiusTop,
+			params.radiusBottom,
+			params.height,
+			params.radialSegments,
+			params.heightSegments,
+			false, // openEnded
+			params.h_min_rad,
+			params.h_length_rad
+		);
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.position.set(0, params.yBase + params.height / 2, 0);
+		return mesh;
+	}
+
+	// Helper to create side cap for HSL shape when not full circle
+	_createSideCapMesh(params, material) {
+		const { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
+
+		const p0 = new THREE.Vector3(0, y_bottom, 0); // Center-bottom
+		const p1 = new THREE.Vector3(r_bottom * Math.cos(angle_rad), y_bottom, r_bottom * Math.sin(angle_rad)); // Outer-bottom
+		const p2 = new THREE.Vector3(r_top * Math.cos(angle_rad), y_top, r_top * Math.sin(angle_rad)); // Outer-top
+		const p3 = new THREE.Vector3(0, y_top, 0); // Center-top
+
+		const geometry = new THREE.BufferGeometry();
+		const vertices = new Float32Array([
+			p0.x, p0.y, p0.z,
+			p1.x, p1.y, p1.z,
+			p2.x, p2.y, p2.z,
+
+			p0.x, p0.y, p0.z,
+			p2.x, p2.y, p2.z,
+			p3.x, p3.y, p3.z,
+		]);
+		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+		geometry.computeVertexNormals(); // Important for proper lighting
+		return new THREE.Mesh(geometry, material);
+	}
+
+	// Helper to create circular end caps for HSL shape
+	_createEndCapMesh(params, material) {
+		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
+		
+		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
+
+		// Ensure innerRadius is less than outerRadius
+		const actualInnerRadius = Math.min(innerRadius, outerRadius - 0.0001);
+
+		const geometry = new THREE.RingGeometry(
+			Math.max(0, actualInnerRadius), // innerRadius cannot be negative
+			outerRadius,
+			radialSegments,
+			1, // thetaSegments for RingGeometry
+			h_min_rad,
+			h_length_rad
+		);
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.position.set(0, yPos, 0);
+		mesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+		return mesh;
+	}
+
+	_updateSubSpaceVolume(limits) {
+		console.log(`Updating HSL SubSpace Volume with limits:`, limits);
+
+		// Remove previous subspace volume if it exists
+		this._disposeVisuals(this.currentVisuals.getObjectByName('subspaceVolume'));
+		// Create shader material for the HSL subspace visualization
 		const shaderMaterial = new THREE.ShaderMaterial({
 			vertexShader: hslVertexShader,
 			fragmentShader: hslFragmentShader,
@@ -192,231 +270,215 @@ export class HSLColorSpace extends ColorSpace {
 				l_min: { value: limits.l.min },
 				l_max: { value: limits.l.max },
 			},
-			transparent: true, // Allows discard to make parts invisible
+			transparent: true,
 			side: THREE.DoubleSide,
-			// depthWrite: true, // Default. Set to false if alpha blending issues with other transparent objects.
 		});
 
 		const volumeMeshGroup = new THREE.Group();
 		volumeMeshGroup.name = 'subspaceVolume';
 
-		const l_min = limits.l.min;
-		const l_max = limits.l.max;
-		const s_max_limit = limits.s.max; // Saturation limit from UI (0-1)
-		const h_min_rad = THREE.MathUtils.degToRad(limits.h.min * 360); // Assuming H is 0-1 from UI
+		const l_min_limit = limits.l.min;
+		const l_max_limit = limits.l.max;
+		const s_min_limit = limits.s.min;
+		const s_max_limit = limits.s.max;
+
+		const h_min_rad = THREE.MathUtils.degToRad(limits.h.min * 360);
 		const h_length_rad = THREE.MathUtils.degToRad((limits.h.max - limits.h.min) * 360);
-
-		const l_midPoint = 0.5;
-		const maxVisualRadiusAtMid = 0.5; // Visual radius of the HSL shape at L=0.5 when S=1
-
-		// Calculate actual radius at L=0.5 based on s_max_limit
-		const currentMaxRadius = maxVisualRadiusAtMid * s_max_limit;
-
-		const fullCircle = Math.abs(h_length_rad - 2.0 * Math.PI) < 0.001;
 		const h_end_rad = h_min_rad + h_length_rad;
 
-		// Lower part (cone/cylinder segment)
-		if (l_min < l_midPoint) {
-			const heightLower = Math.min(l_midPoint, l_max) - l_min;
+		const fullCircle = Math.abs(h_length_rad - 2.0 * Math.PI) < 0.001;
+
+		// Lower segment (from l_min_limit up to L_MID_POINT or l_max_limit)
+		if (l_min_limit < L_MID_POINT && s_max_limit > 0.001) {
+			const segmentLTop = Math.min(L_MID_POINT, l_max_limit);
+			const heightLower = segmentLTop - l_min_limit;
+
 			if (heightLower > 0.001) {
-				// Avoid zero-height geometry
-				// Radius at l_min (bottom of this segment)
-				const radiusAtLMin = (l_min / l_midPoint) * currentMaxRadius;
-				// Radius at l_midPoint or l_max if l_max < l_midPoint (top of this segment)
-				const radiusAtLMidOrLMax = (Math.min(l_midPoint, l_max) / l_midPoint) * currentMaxRadius;
+				const radiusBottomOuter = this._getRadiusAtL(l_min_limit, s_max_limit);
+				const radiusTopOuter = this._getRadiusAtL(segmentLTop, s_max_limit);
 
-				const lowerGeometry = new THREE.CylinderGeometry(
-					radiusAtLMidOrLMax, // radiusTop
-					radiusAtLMin, // radiusBottom
-					heightLower,
-					radialSegments,
-					heightSegments,
-					false, // openEnded
-					h_min_rad,
-					h_length_rad
-				);
-				const lowerMesh = new THREE.Mesh(lowerGeometry, shaderMaterial);
-				lowerMesh.position.set(0, l_min + heightLower / 2, 0);
-				// Shader expects L to range from 0 to 1 across the entire double cone height (0 to 1 in world Y)
-				// The vertex shader's v_hsl.z (l) is calculated based on world Y, so this direct positioning is okay.
-				volumeMeshGroup.add(lowerMesh);
+				const lowerCylinderMesh = this._createHslCylinderSegmentMesh({
+					yBase: l_min_limit,
+					height: heightLower,
+					radiusTop: radiusTopOuter,
+					radiusBottom: radiusBottomOuter,
+					h_min_rad: h_min_rad,
+					h_length_rad: h_length_rad,
+					radialSegments: RADIAL_SEGMENTS,
+					heightSegments: HEIGHT_SEGMENTS,
+				}, shaderMaterial);
+				volumeMeshGroup.add(lowerCylinderMesh);
 
-				if (!fullCircle && heightLower > 0.001) {
-					const y_bottom_l = l_min;
-					const y_top_l = l_min + heightLower;
-					const r_bottom_l = radiusAtLMin;
-					const r_top_l = radiusAtLMidOrLMax;
-
-					// Side cap 1 (at h_min_rad) for lower segment
-					let p0 = new THREE.Vector3(0, y_bottom_l, 0);
-					let p1 = new THREE.Vector3(
-						r_bottom_l * Math.sin(h_min_rad),
-						y_bottom_l,
-						r_bottom_l * Math.cos(h_min_rad)
-					);
-					let p2 = new THREE.Vector3(r_top_l * Math.cos(h_min_rad), y_top_l, r_top_l * Math.sin(h_min_rad));
-					let p3 = new THREE.Vector3(0, y_top_l, 0);
-					const cap1LowerGeom = new THREE.BufferGeometry();
-					const vertices1Lower = new Float32Array([
-						p0.x,
-						p0.y,
-						p0.z,
-						p1.x,
-						p1.y,
-						p1.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p0.x,
-						p0.y,
-						p0.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p3.x,
-						p3.y,
-						p3.z,
-					]);
-					cap1LowerGeom.setAttribute('position', new THREE.BufferAttribute(vertices1Lower, 3));
-					const cap1LowerMesh = new THREE.Mesh(cap1LowerGeom, shaderMaterial);
-					volumeMeshGroup.add(cap1LowerMesh);
-
-					// Side cap 2 (at h_end_rad) for lower segment
-					p1 = new THREE.Vector3(
-						r_bottom_l * Math.sin(h_end_rad),
-						y_bottom_l,
-						r_bottom_l * Math.cos(h_end_rad)
-					);
-					p2 = new THREE.Vector3(r_top_l * Math.cos(h_end_rad), y_top_l, r_top_l * Math.sin(h_end_rad));
-					const cap2LowerGeom = new THREE.BufferGeometry();
-					const vertices2Lower = new Float32Array([
-						p0.x,
-						p0.y,
-						p0.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p1.x,
-						p1.y,
-						p1.z, // Reversed for outward face
-						p0.x,
-						p0.y,
-						p0.z,
-						p3.x,
-						p3.y,
-						p3.z,
-						p2.x,
-						p2.y,
-						p2.z, // Reversed for outward face
-					]);
-					cap2LowerGeom.setAttribute('position', new THREE.BufferAttribute(vertices2Lower, 3));
-					const cap2LowerMesh = new THREE.Mesh(cap2LowerGeom, shaderMaterial);
-					volumeMeshGroup.add(cap2LowerMesh);
+				if (!fullCircle) {
+					const capParams = { y_bottom: l_min_limit, y_top: segmentLTop, r_bottom: radiusBottomOuter, r_top: radiusTopOuter };
+					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial));
+					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial));
 				}
 			}
 		}
 
-		// Upper part (cone/cylinder segment)
-		if (l_max > l_midPoint) {
-			const heightUpper = l_max - Math.max(l_midPoint, l_min);
+		// Upper segment (from L_MID_POINT or l_min_limit up to l_max_limit)
+		if (l_max_limit > L_MID_POINT && s_max_limit > 0.001) {
+			const segmentLBottom = Math.max(L_MID_POINT, l_min_limit);
+			const heightUpper = l_max_limit - segmentLBottom;
+
 			if (heightUpper > 0.001) {
-				// Avoid zero-height geometry
-				// Radius at l_max (top of this segment)
-				const radiusAtLMax = ((1.0 - l_max) / (1.0 - l_midPoint)) * currentMaxRadius;
-				// Radius at l_midPoint or l_min if l_min > l_midPoint (bottom of this segment)
-				const radiusAtLMidOrLMin =
-					((1.0 - Math.max(l_midPoint, l_min)) / (1.0 - l_midPoint)) * currentMaxRadius;
+				const radiusBottomOuter = this._getRadiusAtL(segmentLBottom, s_max_limit);
+				const radiusTopOuter = this._getRadiusAtL(l_max_limit, s_max_limit);
 
-				const upperGeometry = new THREE.CylinderGeometry(
-					radiusAtLMax, // radiusTop
-					radiusAtLMidOrLMin, // radiusBottom
-					heightUpper,
-					radialSegments,
-					heightSegments,
-					false, // openEnded
-					h_min_rad,
-					h_length_rad
-				);
-				const upperMesh = new THREE.Mesh(upperGeometry, shaderMaterial);
-				upperMesh.position.set(0, Math.max(l_midPoint, l_min) + heightUpper / 2, 0);
-				volumeMeshGroup.add(upperMesh);
+				const upperCylinderMesh = this._createHslCylinderSegmentMesh({
+					yBase: segmentLBottom,
+					height: heightUpper,
+					radiusTop: radiusTopOuter,
+					radiusBottom: radiusBottomOuter,
+					h_min_rad: h_min_rad,
+					h_length_rad: h_length_rad,
+					radialSegments: RADIAL_SEGMENTS,
+					heightSegments: HEIGHT_SEGMENTS,
+				}, shaderMaterial);
+				volumeMeshGroup.add(upperCylinderMesh);
 
-				if (!fullCircle && heightUpper > 0.001) {
-					const y_bottom_u = Math.max(l_midPoint, l_min);
-					const y_top_u = l_max;
-					const r_bottom_u = radiusAtLMidOrLMin;
-					const r_top_u = radiusAtLMax;
-
-					// Side cap 1 (at h_min_rad) for upper segment
-					let p0 = new THREE.Vector3(0, y_bottom_u, 0);
-					let p1 = new THREE.Vector3(
-						r_bottom_u * Math.cos(h_min_rad),
-						y_bottom_u,
-						r_bottom_u * Math.sin(h_min_rad)
-					);
-					let p2 = new THREE.Vector3(r_top_u * Math.cos(h_min_rad), y_top_u, r_top_u * Math.sin(h_min_rad));
-					let p3 = new THREE.Vector3(0, y_top_u, 0);
-					const cap1UpperGeom = new THREE.BufferGeometry();
-					const vertices1Upper = new Float32Array([
-						p0.x,
-						p0.y,
-						p0.z,
-						p1.x,
-						p1.y,
-						p1.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p0.x,
-						p0.y,
-						p0.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p3.x,
-						p3.y,
-						p3.z,
-					]);
-					cap1UpperGeom.setAttribute('position', new THREE.BufferAttribute(vertices1Upper, 3));
-					const cap1UpperMesh = new THREE.Mesh(cap1UpperGeom, shaderMaterial);
-					volumeMeshGroup.add(cap1UpperMesh);
-
-					// Side cap 2 (at h_end_rad) for upper segment
-					p1 = new THREE.Vector3(
-						r_bottom_u * Math.cos(h_end_rad),
-						y_bottom_u,
-						r_bottom_u * Math.sin(h_end_rad)
-					);
-					p2 = new THREE.Vector3(r_top_u * Math.cos(h_end_rad), y_top_u, r_top_u * Math.sin(h_end_rad));
-					const cap2UpperGeom = new THREE.BufferGeometry();
-					const vertices2Upper = new Float32Array([
-						p0.x,
-						p0.y,
-						p0.z,
-						p2.x,
-						p2.y,
-						p2.z,
-						p1.x,
-						p1.y,
-						p1.z, // Reversed for outward face
-						p0.x,
-						p0.y,
-						p0.z,
-						p3.x,
-						p3.y,
-						p3.z,
-						p2.x,
-						p2.y,
-						p2.z, // Reversed for outward face
-					]);
-					cap2UpperGeom.setAttribute('position', new THREE.BufferAttribute(vertices2Upper, 3));
-					const cap2UpperMesh = new THREE.Mesh(cap2UpperGeom, shaderMaterial);
-					volumeMeshGroup.add(cap2UpperMesh);
+				if (!fullCircle) {
+					const capParams = { y_bottom: segmentLBottom, y_top: l_max_limit, r_bottom: radiusBottomOuter, r_top: radiusTopOuter };
+					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial));
+					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial));
 				}
+			}
+		}
+
+		// End Caps (Top and Bottom)
+		if (s_max_limit > 0.001) {
+			// Bottom Cap
+			if (l_min_limit > 0.001) {
+				const radiusOuter_lmin = this._getRadiusAtL(l_min_limit, s_max_limit);
+				const radiusInner_lmin = this._getRadiusAtL(l_min_limit, s_min_limit);
+				const bottomCap = this._createEndCapMesh({
+					yPos: l_min_limit,
+					innerRadius: radiusInner_lmin,
+					outerRadius: radiusOuter_lmin,
+					h_min_rad: h_min_rad,
+					h_length_rad: h_length_rad,
+					radialSegments: RADIAL_SEGMENTS
+				}, shaderMaterial);
+				if (bottomCap) volumeMeshGroup.add(bottomCap);
+			}
+
+			// Top Cap
+			if (l_max_limit < 0.999) {
+				const radiusOuter_lmax = this._getRadiusAtL(l_max_limit, s_max_limit);
+				const radiusInner_lmax = this._getRadiusAtL(l_max_limit, s_min_limit);
+				const topCap = this._createEndCapMesh({
+					yPos: l_max_limit,
+					innerRadius: radiusInner_lmax,
+					outerRadius: radiusOuter_lmax,
+					h_min_rad: h_min_rad,
+					h_length_rad: h_length_rad,
+					radialSegments: RADIAL_SEGMENTS
+				}, shaderMaterial);
+				if (topCap) volumeMeshGroup.add(topCap);
 			}
 		}
 
 		this.currentVisuals.add(volumeMeshGroup);
-		console.log('HSL SubSpace Volume updated/created.');
+		console.log('HSL SubSpace Volume updated. Group contains:', volumeMeshGroup.children.length, 'meshes.');
+	}
+
+	// Helper method to dispose of visuals and their resources
+	_disposeVisuals(object3D) {
+		if (object3D) {
+			object3D.traverse((child) => {
+				if (child.isMesh) {
+					if (child.geometry) {
+						child.geometry.dispose();
+					}
+					if (child.material) {
+						if (Array.isArray(child.material)) {
+							child.material.forEach((material) => material.dispose());
+						} else {
+							child.material.dispose();
+						}
+					}
+				}
+			});
+			if (object3D.parent) {
+				object3D.parent.remove(object3D);
+			}
+		}
+	}
+
+	// Helper to calculate radius at a given L value and saturation scaling
+	_getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
+		let radius_at_s1;
+		if (l_value <= L_MID_POINT) {
+			radius_at_s1 = (l_value / L_MID_POINT) * MAX_VISUAL_RADIUS_AT_MID;
+		} else {
+			radius_at_s1 = ((1 - l_value) / (1 - L_MID_POINT)) * MAX_VISUAL_RADIUS_AT_MID;
+		}
+		return Math.max(0, radius_at_s1 * s_value_for_radius_scaling);
+	}
+
+	// Helper to create cylinder segment for HSL shape
+	_createHslCylinderSegmentMesh(params, material) {
+		const geometry = new THREE.CylinderGeometry(
+			params.radiusTop,
+			params.radiusBottom,
+			params.height,
+			params.radialSegments,
+			params.heightSegments,
+			false, // openEnded
+			params.h_min_rad,
+			params.h_length_rad
+		);
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.position.set(0, params.yBase + params.height / 2, 0);
+		return mesh;
+	}
+
+	// Helper to create side cap for HSL shape when not full circle
+	_createSideCapMesh(params, material) {
+		const { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
+
+		const p0 = new THREE.Vector3(0, y_bottom, 0); // Center-bottom
+		const p1 = new THREE.Vector3(r_bottom * Math.cos(angle_rad), y_bottom, r_bottom * Math.sin(angle_rad)); // Outer-bottom
+		const p2 = new THREE.Vector3(r_top * Math.cos(angle_rad), y_top, r_top * Math.sin(angle_rad)); // Outer-top
+		const p3 = new THREE.Vector3(0, y_top, 0); // Center-top
+
+		const geometry = new THREE.BufferGeometry();
+		const vertices = new Float32Array([
+			p0.x, p0.y, p0.z,
+			p1.x, p1.y, p1.z,
+			p2.x, p2.y, p2.z,
+
+			p0.x, p0.y, p0.z,
+			p2.x, p2.y, p2.z,
+			p3.x, p3.y, p3.z,
+		]);
+		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+		geometry.computeVertexNormals(); // Important for proper lighting
+		return new THREE.Mesh(geometry, material);
+	}
+
+	// Helper to create circular end caps for HSL shape
+	_createEndCapMesh(params, material) {
+		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
+		
+		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
+
+		// Ensure innerRadius is less than outerRadius
+		const actualInnerRadius = Math.min(innerRadius, outerRadius - 0.0001);
+
+		const geometry = new THREE.RingGeometry(
+			Math.max(0, actualInnerRadius), // innerRadius cannot be negative
+			outerRadius,
+			radialSegments,
+			1, // thetaSegments for RingGeometry
+			h_min_rad,
+			h_length_rad
+		);
+
+		const mesh = new THREE.Mesh(geometry, material);
+		mesh.rotation.x = -Math.PI / 2; // Rotate to XZ plane
+		mesh.position.set(0, yPos, 0);
+		return mesh;
 	}
 }

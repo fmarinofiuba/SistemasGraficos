@@ -37,7 +37,7 @@ export class UIManager {
 			lMin: 0,
 			lMax: 1,
 		};
-		this.currentModel = 'HSV'; // Default model
+		this.currentModel = 'HSL'; // Default model
 
 		this.initUI();
 	}
@@ -280,6 +280,6 @@ export class UIManager {
 		clearTimeout(this.debounceTimeout);
 		this.debounceTimeout = setTimeout(() => {
 			this.notifySubspaceChange();
-		}, 500); // 500ms debounce
+		}, 100); // 500ms debounce
 	}
 }
