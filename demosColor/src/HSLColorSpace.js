@@ -1,14 +1,20 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
-import { createTubesFromEdges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
+import { createTubesFromEdges, createDirectionalArcs, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
 import hslVertexShader from './shaders/hsl/hslVertex.glsl';
 import hslFragmentShader from './shaders/hsl/hslFragment.glsl';
+import {
+	outlineEdgeThickness,
+	L_MID_POINT,
+	MAX_VISUAL_RADIUS_AT_MID,
+	arrowRadius,
+	arrowLength,
+	axisThickness,
+} from './constants.js';
 
 // Constants for HSL geometry
 const RADIAL_SEGMENTS = 64;
 const HEIGHT_SEGMENTS = 16;
-const L_MID_POINT = 0.5;
-const MAX_VISUAL_RADIUS_AT_MID = 0.5; // Visual radius of the HSL shape at L=0.5 when S=1
 
 export class HSLColorSpace extends ColorSpace {
 	constructor(scene) {
@@ -26,104 +32,87 @@ export class HSLColorSpace extends ColorSpace {
 		console.log('HSLColorSpace: Building axes and labels');
 
 		// Common material and dimensions for arrowheads
-		const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-		const coneRadius = 0.03;
-		const coneHeight = 0.06;
+		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+		// Using centralized constants for arrow dimensions
+		const coneRadius = arrowRadius;
+		const coneHeight = arrowLength;
+
+		// Extend axes by 20% as requested
+		const axisExtensionFactor = 1.2;
 
 		// Lightness Axis (Y) - L goes from y=0 (black) to y=1 (white).
-		const L_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-		const pointsL = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0)];
+		const L_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: axisThickness });
+		const pointsL = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisExtensionFactor, 0)];
 		const L_geometry = new THREE.BufferGeometry().setFromPoints(pointsL);
 		const L_axis = new THREE.Line(L_geometry, L_axisMaterial);
 		this.currentVisuals.add(L_axis);
 
-		// Labels for L
+		// Labels for L - moved 20% further out
 		this.currentVisuals.add(this.makeTextSprite('L=0', { x: 0.05, y: 0, z: 0 }));
-		this.currentVisuals.add(this.makeTextSprite('L=1', { x: 0.05, y: 1.05, z: 0 })); // Adjusted L=1 label slightly for arrowhead
+		this.currentVisuals.add(this.makeTextSprite('L=1', { x: 0.05, y: axisExtensionFactor + 0.05, z: 0 }));
 		this.currentVisuals.add(this.makeTextSprite('L=0.5', { x: 0.05, y: 0.5, z: 0 }));
 
-		// L-axis arrowhead
+		// L-axis arrowhead - positioned at the end of the extended axis
 		const l_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
 		const l_arrowhead = new THREE.Mesh(l_coneGeometry, arrowMaterial);
-		l_arrowhead.position.set(0, 1, 0); // Tip of L-axis
+		l_arrowhead.position.set(0, axisExtensionFactor, 0); // Tip at extended axis end
 		l_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2); // Offset base to end of line
 		this.currentVisuals.add(l_arrowhead);
 
-		// Hue/Saturation indication (circle at L=0.5)
-		// Max saturation (radius = 0.5) occurs at L=0.5.
-		const hueCircleGeometry = new THREE.RingGeometry(0.5 - 0.01, 0.5 + 0.01, 32); // A thin ring
-		const hueCircleMaterial = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide });
-		const hueCircle = new THREE.Mesh(hueCircleGeometry, hueCircleMaterial);
-		hueCircle.position.set(0, 0.5, 0);
-		hueCircle.rotation.x = -Math.PI / 2;
-		//this.currentVisuals.add(hueCircle); // Keep the circle as a guide
+		// Add a TorusGeometry for the H ring at L=0.5
+		const torusRadius = 0.5; // Outer radius (distance from center to middle of tube)
+		const tubeRadius = outlineEdgeThickness; // Using centralized constant for tube thickness
+		const torusGeometry = new THREE.TorusGeometry(
+			torusRadius,
+			tubeRadius,
+			16, // tubular segments
+			64, // radial segments
+			Math.PI * 2 // arc
+		);
+		const torusMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+		const torus = new THREE.Mesh(torusGeometry, torusMaterial);
+		torus.position.set(0, 0.5, 0);
+		torus.rotation.x = Math.PI / 2; // Rotate to be horizontal in XZ plane
+		this.currentVisuals.add(torus);
 
-		// S-axis (Saturation) - from L-axis outwards at L=0.5
-		const s_axisLength = 0.5;
-		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+		// S-axis (Saturation) - from L-axis outwards at L=0.5, extended by 20%
+		const s_axisLength = 0.5 * axisExtensionFactor; // Extended by 20%
+		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: axisThickness });
 		const pointsS = [new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(s_axisLength, 0.5, 0)];
 		const S_geometry = new THREE.BufferGeometry().setFromPoints(pointsS);
 		const S_axis = new THREE.Line(S_geometry, S_axisMaterial);
 		this.currentVisuals.add(S_axis);
+		// S label moved further out
 		this.currentVisuals.add(this.makeTextSprite('S', { x: s_axisLength + 0.1, y: 0.5, z: 0 }));
 
-		// S-axis arrowhead
+		// S-axis arrowhead - positioned at the end of the extended axis
 		const s_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
 		const s_arrowhead = new THREE.Mesh(s_coneGeometry, arrowMaterial);
-		s_arrowhead.position.set(s_axisLength, 0.5, 0); // Tip of S-axis
+		s_arrowhead.position.set(s_axisLength, 0.5, 0); // Tip at extended axis end
 		const s_direction = new THREE.Vector3(1, 0, 0);
 		const s_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), s_direction);
 		s_arrowhead.quaternion.multiply(s_quaternion);
 		s_arrowhead.position.addScaledVector(s_direction, coneHeight / 2); // Offset base
 		this.currentVisuals.add(s_arrowhead);
 
-		// H-arcs (Hue) - around L-axis at L=0.5
+		// H-arcs (Hue) - around L-axis at L=0.5, moved outward
 		const h_arcRadius = s_axisLength + 0.1; // Slightly larger than S-axis extent
 		const h_arcY = 0.5;
-		const h_arcSegments = 16;
-		const h_arcTubeRadius = TUBE_RADIUS * 0.8;
 
+		// Arc data for hue direction indicators
 		const h_arcsData = [
-			{ startAngleDeg: 15, endAngleDeg: 60 },
-			{ startAngleDeg: 195, endAngleDeg: 240 },
+			{ startAngleDeg: 0, endAngleDeg: 60 },
+			{ startAngleDeg: 180, endAngleDeg: 240 },
 		];
 
-		h_arcsData.forEach((arcData) => {
-			const edges = [];
-			const points = [];
-			const startRad = THREE.MathUtils.degToRad(arcData.startAngleDeg);
-			const endRad = THREE.MathUtils.degToRad(arcData.endAngleDeg);
-			const angleStep = (endRad - startRad) / h_arcSegments;
-
-			for (let i = 0; i <= h_arcSegments; i++) {
-				const angle = startRad + i * angleStep;
-				points.push(new THREE.Vector3(h_arcRadius * Math.cos(angle), h_arcY, h_arcRadius * Math.sin(angle)));
-			}
-			for (let i = 0; i < h_arcSegments; i++) {
-				edges.push({ start: points[i], end: points[i + 1] });
-			}
-			const arcTubeGeom = createTubesFromEdges(edges, h_arcTubeRadius, TUBE_RADIAL_SEGMENTS);
-			if (arcTubeGeom) {
-				const arcMesh = new THREE.Mesh(arcTubeGeom, arrowMaterial);
-				this.currentVisuals.add(arcMesh);
-			}
-
-			// Arrowhead cone for H-arc
-			const h_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-			const h_arrowhead = new THREE.Mesh(h_coneGeometry, arrowMaterial);
-			const endPoint = points[points.length - 1];
-			const prevPoint = points[points.length - 2];
-			h_arrowhead.position.copy(endPoint);
-			const direction = new THREE.Vector3().subVectors(endPoint, prevPoint).normalize();
-			const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-			h_arrowhead.quaternion.multiply(quaternion);
-			h_arrowhead.position.addScaledVector(direction, coneHeight / 2);
-			this.currentVisuals.add(h_arrowhead);
-		});
+		// Use the shared utility function to create directional arcs
+		createDirectionalArcs(this.currentVisuals, h_arcsData, h_arcRadius, h_arcY, arrowMaterial);
+		// H label moved further out
 		this.currentVisuals.add(this.makeTextSprite('H', { x: h_arcRadius + 0.15, y: h_arcY, z: 0 }));
 	}
 
 	_buildFullSpaceOutlineObject() {
+		/*
 		console.log('HSLColorSpace: Building full space outline with tubes (central ring only)');
 		const edges = [];
 		const outlineRadius = 0.5; // Radius of the central ring at L=0.5
@@ -143,7 +132,7 @@ export class HSLColorSpace extends ColorSpace {
 			edges.push({ start: centralRingPoints[i], end: centralRingPoints[(i + 1) % numSegments] });
 		}
 
-		const outlineMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+		const outlineMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 		const outlineTubeGeom = createTubesFromEdges(edges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS);
 
 		if (outlineTubeGeom) {
@@ -153,6 +142,7 @@ export class HSLColorSpace extends ColorSpace {
 			console.warn('HSLColorSpace: Failed to create outline tube geometry for central ring.');
 		}
 		console.log('HSL Outline (central ring) built');
+		*/
 	}
 
 	// Helper method to dispose of visuals and their resources
@@ -217,13 +207,25 @@ export class HSLColorSpace extends ColorSpace {
 
 		const geometry = new THREE.BufferGeometry();
 		const vertices = new Float32Array([
-			p0.x, p0.y, p0.z,
-			p1.x, p1.y, p1.z,
-			p2.x, p2.y, p2.z,
+			p0.x,
+			p0.y,
+			p0.z,
+			p1.x,
+			p1.y,
+			p1.z,
+			p2.x,
+			p2.y,
+			p2.z,
 
-			p0.x, p0.y, p0.z,
-			p2.x, p2.y, p2.z,
-			p3.x, p3.y, p3.z,
+			p0.x,
+			p0.y,
+			p0.z,
+			p2.x,
+			p2.y,
+			p2.z,
+			p3.x,
+			p3.y,
+			p3.z,
 		]);
 		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 		geometry.computeVertexNormals(); // Important for proper lighting
@@ -233,7 +235,7 @@ export class HSLColorSpace extends ColorSpace {
 	// Helper to create circular end caps for HSL shape
 	_createEndCapMesh(params, material) {
 		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
-		
+
 		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
 
 		// Ensure innerRadius is less than outerRadius
@@ -297,22 +299,34 @@ export class HSLColorSpace extends ColorSpace {
 				const radiusBottomOuter = this._getRadiusAtL(l_min_limit, s_max_limit);
 				const radiusTopOuter = this._getRadiusAtL(segmentLTop, s_max_limit);
 
-				const lowerCylinderMesh = this._createHslCylinderSegmentMesh({
-					yBase: l_min_limit,
-					height: heightLower,
-					radiusTop: radiusTopOuter,
-					radiusBottom: radiusBottomOuter,
-					h_min_rad: h_min_rad,
-					h_length_rad: h_length_rad,
-					radialSegments: RADIAL_SEGMENTS,
-					heightSegments: HEIGHT_SEGMENTS,
-				}, shaderMaterial);
-				volumeMeshGroup.add(lowerCylinderMesh);
+				const lowerCylinderMesh = this._createHslCylinderSegmentMesh(
+					{
+						yBase: l_min_limit,
+						height: heightLower,
+						radiusTop: radiusTopOuter,
+						radiusBottom: radiusBottomOuter,
+						h_min_rad: h_min_rad,
+						h_length_rad: h_length_rad,
+						radialSegments: RADIAL_SEGMENTS,
+						heightSegments: HEIGHT_SEGMENTS,
+					},
+					shaderMaterial
+				);
+				//volumeMeshGroup.add(lowerCylinderMesh);
 
 				if (!fullCircle) {
-					const capParams = { y_bottom: l_min_limit, y_top: segmentLTop, r_bottom: radiusBottomOuter, r_top: radiusTopOuter };
-					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial));
-					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial));
+					const capParams = {
+						y_bottom: l_min_limit,
+						y_top: segmentLTop,
+						r_bottom: radiusBottomOuter,
+						r_top: radiusTopOuter,
+					};
+					volumeMeshGroup.add(
+						this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
+					);
+					volumeMeshGroup.add(
+						this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
+					);
 				}
 			}
 		}
@@ -326,22 +340,34 @@ export class HSLColorSpace extends ColorSpace {
 				const radiusBottomOuter = this._getRadiusAtL(segmentLBottom, s_max_limit);
 				const radiusTopOuter = this._getRadiusAtL(l_max_limit, s_max_limit);
 
-				const upperCylinderMesh = this._createHslCylinderSegmentMesh({
-					yBase: segmentLBottom,
-					height: heightUpper,
-					radiusTop: radiusTopOuter,
-					radiusBottom: radiusBottomOuter,
-					h_min_rad: h_min_rad,
-					h_length_rad: h_length_rad,
-					radialSegments: RADIAL_SEGMENTS,
-					heightSegments: HEIGHT_SEGMENTS,
-				}, shaderMaterial);
-				volumeMeshGroup.add(upperCylinderMesh);
+				const upperCylinderMesh = this._createHslCylinderSegmentMesh(
+					{
+						yBase: segmentLBottom,
+						height: heightUpper,
+						radiusTop: radiusTopOuter,
+						radiusBottom: radiusBottomOuter,
+						h_min_rad: h_min_rad,
+						h_length_rad: h_length_rad,
+						radialSegments: RADIAL_SEGMENTS,
+						heightSegments: HEIGHT_SEGMENTS,
+					},
+					shaderMaterial
+				);
+				//volumeMeshGroup.add(upperCylinderMesh);
 
 				if (!fullCircle) {
-					const capParams = { y_bottom: segmentLBottom, y_top: l_max_limit, r_bottom: radiusBottomOuter, r_top: radiusTopOuter };
-					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial));
-					volumeMeshGroup.add(this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial));
+					const capParams = {
+						y_bottom: segmentLBottom,
+						y_top: l_max_limit,
+						r_bottom: radiusBottomOuter,
+						r_top: radiusTopOuter,
+					};
+					volumeMeshGroup.add(
+						this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
+					);
+					volumeMeshGroup.add(
+						this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
+					);
 				}
 			}
 		}
@@ -352,14 +378,17 @@ export class HSLColorSpace extends ColorSpace {
 			if (l_min_limit > 0.001) {
 				const radiusOuter_lmin = this._getRadiusAtL(l_min_limit, s_max_limit);
 				const radiusInner_lmin = this._getRadiusAtL(l_min_limit, s_min_limit);
-				const bottomCap = this._createEndCapMesh({
-					yPos: l_min_limit,
-					innerRadius: radiusInner_lmin,
-					outerRadius: radiusOuter_lmin,
-					h_min_rad: h_min_rad,
-					h_length_rad: h_length_rad,
-					radialSegments: RADIAL_SEGMENTS
-				}, shaderMaterial);
+				const bottomCap = this._createEndCapMesh(
+					{
+						yPos: l_min_limit,
+						innerRadius: radiusInner_lmin,
+						outerRadius: radiusOuter_lmin,
+						h_min_rad: h_min_rad,
+						h_length_rad: h_length_rad,
+						radialSegments: RADIAL_SEGMENTS,
+					},
+					shaderMaterial
+				);
 				if (bottomCap) volumeMeshGroup.add(bottomCap);
 			}
 
@@ -367,14 +396,17 @@ export class HSLColorSpace extends ColorSpace {
 			if (l_max_limit < 0.999) {
 				const radiusOuter_lmax = this._getRadiusAtL(l_max_limit, s_max_limit);
 				const radiusInner_lmax = this._getRadiusAtL(l_max_limit, s_min_limit);
-				const topCap = this._createEndCapMesh({
-					yPos: l_max_limit,
-					innerRadius: radiusInner_lmax,
-					outerRadius: radiusOuter_lmax,
-					h_min_rad: h_min_rad,
-					h_length_rad: h_length_rad,
-					radialSegments: RADIAL_SEGMENTS
-				}, shaderMaterial);
+				const topCap = this._createEndCapMesh(
+					{
+						yPos: l_max_limit,
+						innerRadius: radiusInner_lmax,
+						outerRadius: radiusOuter_lmax,
+						h_min_rad: h_min_rad,
+						h_length_rad: h_length_rad,
+						radialSegments: RADIAL_SEGMENTS,
+					},
+					shaderMaterial
+				);
 				if (topCap) volumeMeshGroup.add(topCap);
 			}
 		}
@@ -445,13 +477,25 @@ export class HSLColorSpace extends ColorSpace {
 
 		const geometry = new THREE.BufferGeometry();
 		const vertices = new Float32Array([
-			p0.x, p0.y, p0.z,
-			p1.x, p1.y, p1.z,
-			p2.x, p2.y, p2.z,
+			p0.x,
+			p0.y,
+			p0.z,
+			p1.x,
+			p1.y,
+			p1.z,
+			p2.x,
+			p2.y,
+			p2.z,
 
-			p0.x, p0.y, p0.z,
-			p2.x, p2.y, p2.z,
-			p3.x, p3.y, p3.z,
+			p0.x,
+			p0.y,
+			p0.z,
+			p2.x,
+			p2.y,
+			p2.z,
+			p3.x,
+			p3.y,
+			p3.z,
 		]);
 		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 		geometry.computeVertexNormals(); // Important for proper lighting
@@ -461,7 +505,7 @@ export class HSLColorSpace extends ColorSpace {
 	// Helper to create circular end caps for HSL shape
 	_createEndCapMesh(params, material) {
 		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
-		
+
 		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
 
 		// Ensure innerRadius is less than outerRadius

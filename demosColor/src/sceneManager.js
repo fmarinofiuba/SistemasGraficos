@@ -86,8 +86,35 @@ export class SceneManager {
         console.log(`SceneManager: Updating color subspace for ${this.currentModelType} with limits:`, limits);
         if (this.activeColorSpace) {
             this.activeColorSpace.refreshSubSpaceVolume(limits);
+            // Update orbit controls target to keep focus on the center of the color model
+            this.updateOrbitControlsTarget();
         } else {
             console.error('No active ColorSpace to update subspace volume.');
+        }
+    }
+
+    // Method to update orbit controls target to the center of the current color model
+    updateOrbitControlsTarget() {
+        if (this.activeColorSpace && this.controls) {
+            // For HSV and HSL models, we want to target the vertical middle (y=0.5)
+            // instead of using the geometric center from the bounding box
+            if (this.currentModelType === 'HSV' || this.currentModelType === 'HSL') {
+                // Set target at the middle of the vertical axis (y=0.5)
+                const center = new THREE.Vector3(0, 0.5, 0);
+                this.controls.target.copy(center);
+                this.controls.update();
+                console.log(`SceneManager: Orbit controls target set to middle of ${this.currentModelType} model:`, center);
+            } else {
+                // For RGB and CMY models, use the bounding box center as before
+                const boundingBox = this.activeColorSpace.getCurrentSpaceBoundingBox();
+                if (boundingBox) {
+                    const center = new THREE.Vector3();
+                    boundingBox.getCenter(center);
+                    this.controls.target.copy(center);
+                    this.controls.update();
+                    console.log('SceneManager: Orbit controls target updated to color model center:', center);
+                }
+            }
         }
     }
 
@@ -96,8 +123,19 @@ export class SceneManager {
         if (this.activeColorSpace) {
             const boundingBox = this.activeColorSpace.getCurrentSpaceBoundingBox();
             if (boundingBox) {
-                const center = new THREE.Vector3();
-                boundingBox.getCenter(center);
+                // For HSV and HSL models, set the target at the middle (y=0.5)
+                // instead of using the bounding box center
+                let center;
+                if (this.currentModelType === 'HSV' || this.currentModelType === 'HSL') {
+                    center = new THREE.Vector3(0, 0.5, 0);
+                } else {
+                    // For RGB and CMY models, use the bounding box center
+                    center = new THREE.Vector3();
+                    boundingBox.getCenter(center);
+                }
+                
+                // Update the orbit controls target
+                this.controls.target.copy(center);
 
                 const size = new THREE.Vector3();
                 boundingBox.getSize(size);
@@ -105,7 +143,7 @@ export class SceneManager {
                 // Handle cases where the bounding box might be empty or invalid
                 if (size.x === 0 && size.y === 0 && size.z === 0) {
                     console.warn('Bounding box is empty. Cannot fit camera.');
-                    // Optionally, set a default view or leave camera as is
+                    // Set a default view
                     this.controls.target.copy(new THREE.Vector3(0.5, 0.5, 0.5)); // Default center
                     this.camera.position.set(2, 2, 2); // Default position
                     this.camera.lookAt(this.controls.target);

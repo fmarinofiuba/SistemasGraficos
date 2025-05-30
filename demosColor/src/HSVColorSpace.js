@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
-import { createTubesFromEdges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
+import { createTubesFromEdges, createDirectionalArcs, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
 import hsvVertexShader from './shaders/hsv/hsvVertex.glsl';
 import hsvFragmentShader from './shaders/hsv/hsvFragment.glsl';
+import * as constants from './constants.js';
 
 export class HSVColorSpace extends ColorSpace {
 	constructor(scene) {
@@ -17,27 +18,29 @@ export class HSVColorSpace extends ColorSpace {
 		// S: Radius from V-axis (e.g., along XZ plane from 0 to 1)
 		// H: Angle around V-axis (0 to 360 degrees)
 
-		const V_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff }); // Could be different colors
+		// Using centralized constant for axis thickness
+		const V_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: constants.axisThickness });
+		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: constants.axisThickness }); // Could be different colors
 
 		// Common material and dimensions for arrowheads
-		const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-		const coneRadius = 0.03;
-		const coneHeight = 0.06;
+		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
+		// Using centralized constants for arrow dimensions
+		const coneRadius = constants.arrowRadius;
+		const coneHeight = constants.arrowLength;
 
 		// Value Axis (Y)
 		const v_points = [];
 		v_points.push(new THREE.Vector3(0, 0, 0));
-		v_points.push(new THREE.Vector3(0, 1, 0));
+		v_points.push(new THREE.Vector3(0, 1.2, 0));
 		const v_geometry = new THREE.BufferGeometry().setFromPoints(v_points);
 		const v_axisLine = new THREE.Line(v_geometry, V_axisMaterial);
 		this.currentVisuals.add(v_axisLine);
-		this.currentVisuals.add(this.makeTextSprite('V', new THREE.Vector3(0, 1.1, 0)));
+		this.currentVisuals.add(this.makeTextSprite('V', new THREE.Vector3(0, 1.3, 0)));
 
 		// V-axis arrowhead
 		const v_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
 		const v_arrowhead = new THREE.Mesh(v_coneGeometry, arrowMaterial);
-		v_arrowhead.position.set(0, 1, 0); // Tip of V-axis
+		v_arrowhead.position.set(0, 1.2, 0); // Tip of V-axis
 		// Cone's axis is Y, already points up, no rotation needed if V is along Y
 		v_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2); // Offset base to end of line
 		this.currentVisuals.add(v_arrowhead);
@@ -66,110 +69,64 @@ export class HSVColorSpace extends ColorSpace {
 		// Hue is represented by the circumference. Position 'H' label near the top circle, slightly outside its radius.
 		const outlineTopY = 1.0; // Height of the top circle of the outline
 		const outlineRadius = 1.0; // Radius of the outline cylinder
-		this.currentVisuals.add(this.makeTextSprite('H', new THREE.Vector3(outlineRadius + 0.15, outlineTopY, 0)));
+		this.currentVisuals.add(this.makeTextSprite('H', new THREE.Vector3(outlineRadius + 0.25, outlineTopY, 0)));
 
 		// Add arcs with arrowheads to illustrate Hue direction
 		const arcRadius = outlineRadius + 0.1; // Slightly larger than the main outline
 		const arcY = outlineTopY;
-		const arcSegments = 16; // Number of segments for each arc
-		const arcTubeRadius = TUBE_RADIUS * 0.8; // Thinner tubes for arrows
-		// arrowMaterial is already defined
 
+		// Arc data for hue direction indicators
 		const arcsData = [
-			{ startAngleDeg: 15, endAngleDeg: 60 },
-			{ startAngleDeg: 195, endAngleDeg: 240 },
+			{ startAngleDeg: 0, endAngleDeg: 60 },
+			{ startAngleDeg: 180, endAngleDeg: 240 },
 		];
 
-		arcsData.forEach((arcData) => {
-			const edges = [];
-			const points = [];
-			const startRad = THREE.MathUtils.degToRad(arcData.startAngleDeg);
-			const endRad = THREE.MathUtils.degToRad(arcData.endAngleDeg);
-			const angleStep = (endRad - startRad) / arcSegments;
-
-			for (let i = 0; i <= arcSegments; i++) {
-				const angle = startRad + i * angleStep;
-				points.push(new THREE.Vector3(arcRadius * Math.cos(angle), arcY, arcRadius * Math.sin(angle)));
-			}
-			for (let i = 0; i < arcSegments; i++) {
-				edges.push({ start: points[i], end: points[i + 1] });
-			}
-			const arcTubeGeom = createTubesFromEdges(edges, arcTubeRadius, TUBE_RADIAL_SEGMENTS);
-			if (arcTubeGeom) {
-				const arcMesh = new THREE.Mesh(arcTubeGeom, arrowMaterial);
-				this.currentVisuals.add(arcMesh);
-			}
-
-			// Arrowhead cone
-			const coneRadius = 0.03;
-			const coneHeight = 0.06;
-			const coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-			const arrowhead = new THREE.Mesh(coneGeometry, arrowMaterial);
-
-			// Position and orient arrowhead
-			const endPoint = points[points.length - 1];
-			const prevPoint = points[points.length - 2]; // Point before the end to determine direction
-			arrowhead.position.copy(endPoint);
-
-			// Direction vector for the arrowhead
-			const direction = new THREE.Vector3().subVectors(endPoint, prevPoint).normalize();
-			// Align cone's axis (Y) with the direction vector
-			const quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-			arrowhead.quaternion.multiply(quaternion); // Sets cone's Y-axis (tip) along 'direction'
-			// The following rotation was likely incorrect for a tangential arrowhead:
-			// arrowhead.rotateX(Math.PI / 2);
-			// Small offset to position the base of the cone at the endpoint
-			// The cone's center is initially at endPoint, tip points along 'direction'.
-			// This moves the cone so its base (center of the -Y face) is at endPoint.
-			arrowhead.position.addScaledVector(direction, coneHeight / 2);
-
-			this.currentVisuals.add(arrowhead);
-		});
+		// Use the shared utility function to create directional arcs
+		createDirectionalArcs(this.currentVisuals, arcsData, arcRadius, arcY, arrowMaterial);
 
 		console.log('HSV Axes and Labels built');
 	}
 
 	_buildFullSpaceOutlineObject() {
-		console.log('HSVColorSpace: Building full space outline with tubes (cylinder)');
-		const edges = [];
-		const outlineRadius = 1.0; // Matches existing CylinderGeometry radius
-		const outlineHeight = 1.0; // Matches existing CylinderGeometry height
-		const numSegments = 32; // Number of segments for the circles
+		console.log('HSVColorSpace: Building full space outline with TorusGeometry');
 
-		const bottomY = 0;
-		const topY = outlineHeight;
+		// Create a group to hold the top and bottom torus rings
+		const outlineGroup = new THREE.Group();
+		outlineGroup.name = 'fullSpaceOutline_HSV';
 
-		const bottomRingPoints = [];
-		const topRingPoints = [];
+		const ringRadius = 1.0; // Radius of the HSV cylinder
+		const tubeRadius = constants.outlineEdgeThickness; // Using centralized constant for tube thickness
+		const radialSegments = 16; // Segments around the tube
+		const tubularSegments = 64; // Segments around the torus
 
-		for (let i = 0; i < numSegments; i++) {
-			const angle = (i / numSegments) * Math.PI * 2;
-			const x = outlineRadius * Math.cos(angle);
-			const z = outlineRadius * Math.sin(angle);
-			bottomRingPoints.push(new THREE.Vector3(x, bottomY, z));
-			topRingPoints.push(new THREE.Vector3(x, topY, z));
-		}
+		// Common material for both rings
+		const ringMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
-		// Edges for bottom and top rings
-		for (let i = 0; i < numSegments; i++) {
-			edges.push({ start: bottomRingPoints[i], end: bottomRingPoints[(i + 1) % numSegments] });
-			edges.push({ start: topRingPoints[i], end: topRingPoints[(i + 1) % numSegments] });
-			// Vertical edges removed as per user request
-		}
+		// Bottom ring (y=0)
+		const bottomTorusGeometry = new THREE.TorusGeometry(
+			ringRadius, // Torus radius
+			tubeRadius, // Tube radius using the centralized constant
+			radialSegments,
+			tubularSegments
+		);
+		const bottomTorus = new THREE.Mesh(bottomTorusGeometry, ringMaterial);
+		bottomTorus.rotation.x = Math.PI / 2; // Rotate to lay flat in XZ plane
+		bottomTorus.position.y = 0; // Position at bottom of cylinder
+		outlineGroup.add(bottomTorus);
 
-		const tubeGeometry = createTubesFromEdges(edges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS);
+		// Top ring (y=1)
+		const topTorusGeometry = new THREE.TorusGeometry(
+			ringRadius, // Torus radius
+			tubeRadius, // Tube radius using the centralized constant
+			radialSegments,
+			tubularSegments
+		);
+		const topTorus = new THREE.Mesh(topTorusGeometry, ringMaterial);
+		topTorus.rotation.x = Math.PI / 2; // Rotate to lay flat in XZ plane
+		topTorus.position.y = 1; // Position at top of cylinder
+		outlineGroup.add(topTorus);
 
-		if (!tubeGeometry) {
-			console.warn('HSVColorSpace: Tube geometry for outline could not be created.');
-			const group = new THREE.Group();
-			group.name = 'fullSpaceOutline_HSV';
-			return group; // Return an empty group
-		}
-
-		const tubeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-		const outlineObject = new THREE.Mesh(tubeGeometry, tubeMaterial);
-		outlineObject.name = 'fullSpaceOutline_HSV';
-		return outlineObject;
+		return outlineGroup;
 	}
 
 	_updateSubSpaceVolume(limits) {

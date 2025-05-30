@@ -1,5 +1,6 @@
 // src/UIManager.js
 import GUI from 'lil-gui';
+import * as constants from './constants.js';
 
 export class UIManager {
 	constructor(sceneManager) {
@@ -37,7 +38,7 @@ export class UIManager {
 			lMin: 0,
 			lMax: 1,
 		};
-		this.currentModel = 'HSL'; // Default model
+		this.currentModel = constants.initialModel; // Default model
 
 		this.initUI();
 	}

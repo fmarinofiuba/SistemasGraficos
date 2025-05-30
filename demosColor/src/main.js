@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { SceneManager } from './sceneManager.js';
 import { UIManager } from './UIManager.js';
+import * as constants from './constants.js';
 // ColorSpace base class is imported by its subclasses (RGBColorSpace, CMYColorSpace, etc.)
 // So, no direct import of ColorSpace here unless used for type checking, which is not the case now.
 
@@ -30,14 +31,18 @@ function setupThreeJs() {
 	// controls.target.set(0, 0, 0); // OrbitControls target is (0,0,0) by default
 
 	// Basic lighting (as per spec: main.js or similar for initial setup)
-	const ambientLight = new THREE.AmbientLight(0x666666); // Softer ambient light
+	const ambientLight = new THREE.AmbientLight(0xffffff); // Softer ambient light
 	scene.add(ambientLight);
 
-	const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+	const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
 	directionalLight.position.set(1, 1.5, 1).normalize();
 	scene.add(directionalLight);
 
 	scene.background = new THREE.Color(0x333333); // Add a background color
+
+	//grid
+	const gridHelper = new THREE.GridHelper(2, 10);
+	scene.add(gridHelper);
 
 	window.addEventListener('resize', onResize);
 	onResize();
@@ -82,7 +87,7 @@ if (uiManager.currentModel) {
 } else {
 	console.error('UIManager did not initialize currentModel correctly.');
 	// Fallback to RGB if something went wrong with UIManager's default model
-	sceneManager.setColorModel('HSV');
+	sceneManager.setColorModel(constants.initialModel);
 }
 
 animate();
