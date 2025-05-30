@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
-import { createTubesFromEdges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
+import { createTubesFromEdges, createAxis, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
 import rgbVertexShader from './shaders/rgb/rgbVertex.glsl';
 import rgbFragmentShader from './shaders/rgb/rgbFragment.glsl';
 import { outlineEdgeThickness, arrowRadius, arrowLength, axisThickness } from './constants.js';
@@ -13,64 +13,42 @@ export class RGBColorSpace extends ColorSpace {
 
 	_buildAxesAndLabels() {
 		console.log('RGBColorSpace: Building axes and labels');
+		
+		// Extension factor for axes (20% longer for better visibility)
 		const axisLength = 1.2;
-		// Using centralized constants for axis thickness
-		const R_axisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: axisThickness });
-		const G_axisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: axisThickness });
-		const B_axisMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: axisThickness });
 
-		const pointsR = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(axisLength, 0, 0)];
-		const pointsG = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisLength, 0)];
-		const pointsB = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, axisLength)];
+		// Create R-axis (X-axis) with red color
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(axisLength, 0, 0),
+			'R',
+			new THREE.Vector3(0.1, 0, 0),
+			0xff0000, // Red color
+			this.makeTextSprite.bind(this)
+		);
 
-		const R_geometry = new THREE.BufferGeometry().setFromPoints(pointsR);
-		const G_geometry = new THREE.BufferGeometry().setFromPoints(pointsG);
-		const B_geometry = new THREE.BufferGeometry().setFromPoints(pointsB);
+		// Create G-axis (Y-axis) with green color
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(0, axisLength, 0),
+			'G',
+			new THREE.Vector3(0, 0.1, 0),
+			0x00ff00, // Green color
+			this.makeTextSprite.bind(this)
+		);
 
-		const R_axis = new THREE.Line(R_geometry, R_axisMaterial);
-		const G_axis = new THREE.Line(G_geometry, G_axisMaterial);
-		const B_axis = new THREE.Line(B_geometry, B_axisMaterial);
-
-		this.currentVisuals.add(R_axis, G_axis, B_axis);
-
-		// Labels
-		this.currentVisuals.add(this.makeTextSprite('R', { x: axisLength + 0.1, y: 0, z: 0 }));
-		this.currentVisuals.add(this.makeTextSprite('G', { x: 0, y: axisLength + 0.1, z: 0 }));
-		this.currentVisuals.add(this.makeTextSprite('B', { x: 0, y: 0, z: axisLength + 0.1 }));
-
-		// Arrowheads using centralized constants
-		const coneRadius = arrowRadius;
-		const coneHeight = arrowLength;
-		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-
-		// R-axis arrowhead
-		const r_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const r_arrowhead = new THREE.Mesh(r_coneGeometry, arrowMaterial);
-		r_arrowhead.position.set(axisLength, 0, 0);
-		const r_direction = new THREE.Vector3(1, 0, 0);
-		const r_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), r_direction);
-		r_arrowhead.quaternion.multiply(r_quaternion);
-		r_arrowhead.position.addScaledVector(r_direction, coneHeight / 2);
-		this.currentVisuals.add(r_arrowhead);
-
-		// G-axis arrowhead
-		const g_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const g_arrowhead = new THREE.Mesh(g_coneGeometry, arrowMaterial);
-		g_arrowhead.position.set(0, axisLength, 0);
-		// G-axis is along Y, cone's default orientation is Y-up, no rotation needed for quaternion.
-		// Only need to offset its base to the end of the line.
-		g_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2);
-		this.currentVisuals.add(g_arrowhead);
-
-		// B-axis arrowhead
-		const b_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const b_arrowhead = new THREE.Mesh(b_coneGeometry, arrowMaterial);
-		b_arrowhead.position.set(0, 0, axisLength);
-		const b_direction = new THREE.Vector3(0, 0, 1);
-		const b_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b_direction);
-		b_arrowhead.quaternion.multiply(b_quaternion);
-		b_arrowhead.position.addScaledVector(b_direction, coneHeight / 2);
-		this.currentVisuals.add(b_arrowhead);
+		// Create B-axis (Z-axis) with blue color
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(0, 0, axisLength),
+			'B',
+			new THREE.Vector3(0, 0, 0.1),
+			0x0000ff, // Blue color
+			this.makeTextSprite.bind(this)
+		);
 	}
 
 	_buildFullSpaceOutlineObject() {

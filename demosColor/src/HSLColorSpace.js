@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
-import { createTubesFromEdges, createDirectionalArcs, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
+import {
+	createTubesFromEdges,
+	createDirectionalArcs,
+	createDirectionalArc,
+	createAxis,
+	TUBE_RADIUS,
+	TUBE_RADIAL_SEGMENTS,
+} from './GeometryUtils.js';
 import hslVertexShader from './shaders/hsl/hslVertex.glsl';
 import hslFragmentShader from './shaders/hsl/hslFragment.glsl';
 import {
@@ -29,35 +36,29 @@ export class HSLColorSpace extends ColorSpace {
 	}
 
 	_buildAxesAndLabels() {
-		console.log('HSLColorSpace: Building axes and labels');
+		console.log('HSL Axes and Labels building');
+		// HSL: Cylindrical (double-cone) model
+		// L: height (0 to 1), S: radius, H: angle
+		// Origin is at (0,0,0), L extends from 0 to 1
+		// Clear any existing visuals
+		this.clearCurrentVisuals();
 
-		// Common material and dimensions for arrowheads
-		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-		// Using centralized constants for arrow dimensions
-		const coneRadius = arrowRadius;
-		const coneHeight = arrowLength;
+		// Common material for axes and arrowheads
+		const axisMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
-		// Extend axes by 20% as requested
+		// Extension factor for axes (make them 20% longer for better visibility)
 		const axisExtensionFactor = 1.2;
 
-		// Lightness Axis (Y) - L goes from y=0 (black) to y=1 (white).
-		const L_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: axisThickness });
-		const pointsL = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisExtensionFactor, 0)];
-		const L_geometry = new THREE.BufferGeometry().setFromPoints(pointsL);
-		const L_axis = new THREE.Line(L_geometry, L_axisMaterial);
-		this.currentVisuals.add(L_axis);
-
-		// Labels for L - moved 20% further out
-		this.currentVisuals.add(this.makeTextSprite('L=0', { x: 0.05, y: 0, z: 0 }));
-		this.currentVisuals.add(this.makeTextSprite('L=1', { x: 0.05, y: axisExtensionFactor + 0.05, z: 0 }));
-		this.currentVisuals.add(this.makeTextSprite('L=0.5', { x: 0.05, y: 0.5, z: 0 }));
-
-		// L-axis arrowhead - positioned at the end of the extended axis
-		const l_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const l_arrowhead = new THREE.Mesh(l_coneGeometry, arrowMaterial);
-		l_arrowhead.position.set(0, axisExtensionFactor, 0); // Tip at extended axis end
-		l_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2); // Offset base to end of line
-		this.currentVisuals.add(l_arrowhead);
+		// L-axis (Lightness) - vertical, extends from 0 to axisExtensionFactor
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(0, axisExtensionFactor, 0),
+			'L',
+			new THREE.Vector3(0, 0.1, 0),
+			0xffffff,
+			this.makeTextSprite.bind(this)
+		);
 
 		// Add a TorusGeometry for the H ring at L=0.5
 		const torusRadius = 0.5; // Outer radius (distance from center to middle of tube)
@@ -77,73 +78,55 @@ export class HSLColorSpace extends ColorSpace {
 
 		// S-axis (Saturation) - from L-axis outwards at L=0.5, extended by 20%
 		const s_axisLength = 0.5 * axisExtensionFactor; // Extended by 20%
-		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: axisThickness });
-		const pointsS = [new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(s_axisLength, 0.5, 0)];
-		const S_geometry = new THREE.BufferGeometry().setFromPoints(pointsS);
-		const S_axis = new THREE.Line(S_geometry, S_axisMaterial);
-		this.currentVisuals.add(S_axis);
-		// S label moved further out
-		this.currentVisuals.add(this.makeTextSprite('S', { x: s_axisLength + 0.1, y: 0.5, z: 0 }));
 
-		// S-axis arrowhead - positioned at the end of the extended axis
-		const s_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const s_arrowhead = new THREE.Mesh(s_coneGeometry, arrowMaterial);
-		s_arrowhead.position.set(s_axisLength, 0.5, 0); // Tip at extended axis end
-		const s_direction = new THREE.Vector3(1, 0, 0);
-		const s_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), s_direction);
-		s_arrowhead.quaternion.multiply(s_quaternion);
-		s_arrowhead.position.addScaledVector(s_direction, coneHeight / 2); // Offset base
-		this.currentVisuals.add(s_arrowhead);
+		// Create S-axis using the shared utility function
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0.5, 0),
+			new THREE.Vector3(0, 0.5, s_axisLength),
+			'S',
+			new THREE.Vector3(0.1, 0, 0),
+			0xffffff,
+			this.makeTextSprite.bind(this)
+		);
 
 		// H-arcs (Hue) - around L-axis at L=0.5, moved outward
 		const h_arcRadius = s_axisLength + 0.1; // Slightly larger than S-axis extent
 		const h_arcY = 0.5;
 
-		// Arc data for hue direction indicators
-		const h_arcsData = [
-			{ startAngleDeg: 0, endAngleDeg: 60 },
-			{ startAngleDeg: 180, endAngleDeg: 240 },
-		];
+		// Create material for the arcs and arrowheads
+		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
-		// Use the shared utility function to create directional arcs
-		createDirectionalArcs(this.currentVisuals, h_arcsData, h_arcRadius, h_arcY, arrowMaterial);
+		// Create a single directional arc
+		const startAngleDeg = 0;
+		const endAngleDeg = 45;
+
+		// Create the first directional arc (don't pass parent to control adding ourselves)
+		const firstArc = createDirectionalArc(
+			null, // Don't add to parent yet
+			startAngleDeg,
+			endAngleDeg,
+			h_arcRadius,
+			h_arcY,
+			arrowMaterial
+		);
+
+		// Add the first arc to the scene
+		this.currentVisuals.add(firstArc);
+
+		// Clone the first arc to create the second
+		const secondArc = firstArc.clone();
+
+		// Rotate the second arc 180 degrees around Y axis
+		secondArc.rotateY(Math.PI);
+
+		// Add the second arc to the scene
+		this.currentVisuals.add(secondArc);
 		// H label moved further out
 		this.currentVisuals.add(this.makeTextSprite('H', { x: h_arcRadius + 0.15, y: h_arcY, z: 0 }));
 	}
 
-	_buildFullSpaceOutlineObject() {
-		/*
-		console.log('HSLColorSpace: Building full space outline with tubes (central ring only)');
-		const edges = [];
-		const outlineRadius = 0.5; // Radius of the central ring at L=0.5
-		const centralRingY = 0.5; // Y-coordinate of the central ring
-		const numSegments = 64; // Number of segments for the central ring
-
-		const centralRingPoints = [];
-		for (let i = 0; i < numSegments; i++) {
-			const angle = (i / numSegments) * Math.PI * 2;
-			centralRingPoints.push(
-				new THREE.Vector3(outlineRadius * Math.cos(angle), centralRingY, outlineRadius * Math.sin(angle))
-			);
-		}
-
-		// Edges for the central ring
-		for (let i = 0; i < numSegments; i++) {
-			edges.push({ start: centralRingPoints[i], end: centralRingPoints[(i + 1) % numSegments] });
-		}
-
-		const outlineMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-		const outlineTubeGeom = createTubesFromEdges(edges, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS);
-
-		if (outlineTubeGeom) {
-			const outlineMesh = new THREE.Mesh(outlineTubeGeom, outlineMaterial);
-			this.currentVisuals.add(outlineMesh);
-		} else {
-			console.warn('HSLColorSpace: Failed to create outline tube geometry for central ring.');
-		}
-		console.log('HSL Outline (central ring) built');
-		*/
-	}
+	_buildFullSpaceOutlineObject() {}
 
 	// Helper method to dispose of visuals and their resources
 	_disposeVisuals(object3D) {
@@ -273,7 +256,6 @@ export class HSLColorSpace extends ColorSpace {
 				l_max: { value: limits.l.max },
 			},
 			transparent: true,
-			side: THREE.DoubleSide,
 		});
 
 		const volumeMeshGroup = new THREE.Group();
@@ -312,7 +294,7 @@ export class HSLColorSpace extends ColorSpace {
 					},
 					shaderMaterial
 				);
-				//volumeMeshGroup.add(lowerCylinderMesh);
+				volumeMeshGroup.add(lowerCylinderMesh);
 
 				if (!fullCircle) {
 					const capParams = {
@@ -353,7 +335,7 @@ export class HSLColorSpace extends ColorSpace {
 					},
 					shaderMaterial
 				);
-				//volumeMeshGroup.add(upperCylinderMesh);
+				volumeMeshGroup.add(upperCylinderMesh);
 
 				if (!fullCircle) {
 					const capParams = {

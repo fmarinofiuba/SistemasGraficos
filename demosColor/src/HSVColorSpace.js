@@ -1,6 +1,13 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
-import { createTubesFromEdges, createDirectionalArcs, TUBE_RADIUS, TUBE_RADIAL_SEGMENTS } from './GeometryUtils.js';
+import {
+	createTubesFromEdges,
+	createDirectionalArcs,
+	createDirectionalArc,
+	createAxis,
+	TUBE_RADIUS,
+	TUBE_RADIAL_SEGMENTS,
+} from './GeometryUtils.js';
 import hsvVertexShader from './shaders/hsv/hsvVertex.glsl';
 import hsvFragmentShader from './shaders/hsv/hsvFragment.glsl';
 import * as constants from './constants.js';
@@ -13,58 +20,39 @@ export class HSVColorSpace extends ColorSpace {
 	}
 
 	_buildAxesAndLabels() {
-		// TODO: Implement HSV axes and labels
-		// V: Vertical axis (e.g., Y axis from 0 to 1)
-		// S: Radius from V-axis (e.g., along XZ plane from 0 to 1)
+		console.log('HSVColorSpace: Building axes and labels');
+
+		// HSV: Cylindrical model
+		// V: height (0 to 1), S: radius from V-axis, H: angle around V-axis
+		// V: Value (Y-axis) - vertical, 0 to 1
+		// S: Saturation (radial) - horizontal, outward from V-axis, 0 to 1
 		// H: Angle around V-axis (0 to 360 degrees)
 
-		// Using centralized constant for axis thickness
-		const V_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: constants.axisThickness });
-		const S_axisMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: constants.axisThickness }); // Could be different colors
+		// Extension factor for axes (make them 20% longer for better visibility)
+		const axisExtensionFactor = 1.2;
 
-		// Common material and dimensions for arrowheads
-		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-		// Using centralized constants for arrow dimensions
-		const coneRadius = constants.arrowRadius;
-		const coneHeight = constants.arrowLength;
+		// Value Axis (Y) - vertical, extends from 0 to axisExtensionFactor
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 0, 0),
+			new THREE.Vector3(0, axisExtensionFactor, 0),
+			'V',
+			new THREE.Vector3(0, 0.1, 0),
+			0xffffff,
+			this.makeTextSprite.bind(this)
+		);
 
-		// Value Axis (Y)
-		const v_points = [];
-		v_points.push(new THREE.Vector3(0, 0, 0));
-		v_points.push(new THREE.Vector3(0, 1.2, 0));
-		const v_geometry = new THREE.BufferGeometry().setFromPoints(v_points);
-		const v_axisLine = new THREE.Line(v_geometry, V_axisMaterial);
-		this.currentVisuals.add(v_axisLine);
-		this.currentVisuals.add(this.makeTextSprite('V', new THREE.Vector3(0, 1.3, 0)));
-
-		// V-axis arrowhead
-		const v_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const v_arrowhead = new THREE.Mesh(v_coneGeometry, arrowMaterial);
-		v_arrowhead.position.set(0, 1.2, 0); // Tip of V-axis
-		// Cone's axis is Y, already points up, no rotation needed if V is along Y
-		v_arrowhead.position.addScaledVector(new THREE.Vector3(0, 1, 0), coneHeight / 2); // Offset base to end of line
-		this.currentVisuals.add(v_arrowhead);
-
-		// Saturation Axis (e.g., along X for visualization)
-		const s_axisLength = 1.0;
-		const s_axisExtendedLength = s_axisLength * 1.2;
-		const s_points = [];
-		s_points.push(new THREE.Vector3(0, 0, 0)); // Assuming V=0, S can be represented at this plane
-		s_points.push(new THREE.Vector3(s_axisExtendedLength, 0, 0));
-		const s_geometry = new THREE.BufferGeometry().setFromPoints(s_points);
-		const s_axisLine = new THREE.Line(s_geometry, S_axisMaterial);
-		this.currentVisuals.add(s_axisLine);
-		this.currentVisuals.add(this.makeTextSprite('S', new THREE.Vector3(s_axisExtendedLength + 0.1, 0, 0)));
-
-		// S-axis arrowhead
-		const s_coneGeometry = new THREE.ConeGeometry(coneRadius, coneHeight, 16);
-		const s_arrowhead = new THREE.Mesh(s_coneGeometry, arrowMaterial);
-		s_arrowhead.position.set(s_axisExtendedLength, 0, 0); // Tip of S-axis
-		const s_direction = new THREE.Vector3(1, 0, 0);
-		const s_quaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), s_direction);
-		s_arrowhead.quaternion.multiply(s_quaternion);
-		s_arrowhead.position.addScaledVector(s_direction, coneHeight / 2); // Offset base to end of line
-		this.currentVisuals.add(s_arrowhead);
+		// Saturation Axis (X at y=1) - horizontal at the top of V axis
+		const s_axisLength = 1.0 * axisExtensionFactor; // Extended by 20%
+		createAxis(
+			this.currentVisuals,
+			new THREE.Vector3(0, 1.0, 0),
+			new THREE.Vector3(0, 1.0, s_axisLength),
+			'S',
+			new THREE.Vector3(0.1, 0, 0),
+			0xffffff,
+			this.makeTextSprite.bind(this)
+		);
 
 		// Hue is represented by the circumference. Position 'H' label near the top circle, slightly outside its radius.
 		const outlineTopY = 1.0; // Height of the top circle of the outline
@@ -75,14 +63,34 @@ export class HSVColorSpace extends ColorSpace {
 		const arcRadius = outlineRadius + 0.1; // Slightly larger than the main outline
 		const arcY = outlineTopY;
 
-		// Arc data for hue direction indicators
-		const arcsData = [
-			{ startAngleDeg: 0, endAngleDeg: 60 },
-			{ startAngleDeg: 180, endAngleDeg: 240 },
-		];
+		// Create material for the arcs and arrowheads
+		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
-		// Use the shared utility function to create directional arcs
-		createDirectionalArcs(this.currentVisuals, arcsData, arcRadius, arcY, arrowMaterial);
+		// Create a single directional arc
+		const startAngleDeg = 0;
+		const endAngleDeg = 45;
+
+		// Create the first directional arc (don't pass parent to control adding ourselves)
+		const firstArc = createDirectionalArc(
+			null, // Don't add to parent yet
+			startAngleDeg,
+			endAngleDeg,
+			arcRadius,
+			arcY,
+			arrowMaterial
+		);
+
+		// Add the first arc to the scene
+		this.currentVisuals.add(firstArc);
+
+		// Clone the first arc to create the second
+		const secondArc = firstArc.clone();
+
+		// Rotate the second arc 180 degrees around Y axis
+		secondArc.rotateY(Math.PI);
+
+		// Add the second arc to the scene
+		this.currentVisuals.add(secondArc);
 
 		console.log('HSV Axes and Labels built');
 	}
