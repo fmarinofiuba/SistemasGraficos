@@ -43,6 +43,9 @@ export class HSLColorSpace extends ColorSpace {
 		// Clear any existing visuals
 		this.clearCurrentVisuals();
 
+		//axes helpers
+		this.scene.add(new THREE.AxesHelper(1));
+
 		// Common material for axes and arrowheads
 		const axisMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
@@ -179,42 +182,6 @@ export class HSLColorSpace extends ColorSpace {
 		return mesh;
 	}
 
-	// Helper to create side cap for HSL shape when not full circle
-	_createSideCapMesh(params, material) {
-		const { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
-
-		const p0 = new THREE.Vector3(0, y_bottom, 0); // Center-bottom
-		const p1 = new THREE.Vector3(r_bottom * Math.cos(angle_rad), y_bottom, r_bottom * Math.sin(angle_rad)); // Outer-bottom
-		const p2 = new THREE.Vector3(r_top * Math.cos(angle_rad), y_top, r_top * Math.sin(angle_rad)); // Outer-top
-		const p3 = new THREE.Vector3(0, y_top, 0); // Center-top
-
-		const geometry = new THREE.BufferGeometry();
-		const vertices = new Float32Array([
-			p0.x,
-			p0.y,
-			p0.z,
-			p1.x,
-			p1.y,
-			p1.z,
-			p2.x,
-			p2.y,
-			p2.z,
-
-			p0.x,
-			p0.y,
-			p0.z,
-			p2.x,
-			p2.y,
-			p2.z,
-			p3.x,
-			p3.y,
-			p3.z,
-		]);
-		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-		geometry.computeVertexNormals(); // Important for proper lighting
-		return new THREE.Mesh(geometry, material);
-	}
-
 	// Helper to create circular end caps for HSL shape
 	_createEndCapMesh(params, material) {
 		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
@@ -256,6 +223,7 @@ export class HSLColorSpace extends ColorSpace {
 				l_max: { value: limits.l.max },
 			},
 			transparent: true,
+			side: THREE.DoubleSide,
 		});
 
 		const volumeMeshGroup = new THREE.Group();
@@ -335,7 +303,7 @@ export class HSLColorSpace extends ColorSpace {
 					},
 					shaderMaterial
 				);
-				volumeMeshGroup.add(upperCylinderMesh);
+				//volumeMeshGroup.add(upperCylinderMesh);
 
 				if (!fullCircle) {
 					const capParams = {
@@ -344,12 +312,14 @@ export class HSLColorSpace extends ColorSpace {
 						r_bottom: radiusBottomOuter,
 						r_top: radiusTopOuter,
 					};
-					volumeMeshGroup.add(
-						this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
-					);
-					volumeMeshGroup.add(
-						this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
-					);
+					volumeMeshGroup
+						.add
+						//this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
+						();
+					volumeMeshGroup
+						.add
+						//this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
+						();
 				}
 			}
 		}
@@ -371,7 +341,7 @@ export class HSLColorSpace extends ColorSpace {
 					},
 					shaderMaterial
 				);
-				if (bottomCap) volumeMeshGroup.add(bottomCap);
+				//if (bottomCap) volumeMeshGroup.add(bottomCap);
 			}
 
 			// Top Cap
@@ -389,7 +359,7 @@ export class HSLColorSpace extends ColorSpace {
 					},
 					shaderMaterial
 				);
-				if (topCap) volumeMeshGroup.add(topCap);
+				//if (topCap) volumeMeshGroup.add(topCap);
 			}
 		}
 
@@ -450,11 +420,15 @@ export class HSLColorSpace extends ColorSpace {
 
 	// Helper to create side cap for HSL shape when not full circle
 	_createSideCapMesh(params, material) {
-		const { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
+		let { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
+
+		//angle_rad += Math.PI / 2;
+		let x = Math.cos(angle_rad);
+		let z = Math.sin(angle_rad);
 
 		const p0 = new THREE.Vector3(0, y_bottom, 0); // Center-bottom
-		const p1 = new THREE.Vector3(r_bottom * Math.cos(angle_rad), y_bottom, r_bottom * Math.sin(angle_rad)); // Outer-bottom
-		const p2 = new THREE.Vector3(r_top * Math.cos(angle_rad), y_top, r_top * Math.sin(angle_rad)); // Outer-top
+		const p1 = new THREE.Vector3(r_bottom * x, y_bottom, r_bottom * z); // Outer-bottom
+		const p2 = new THREE.Vector3(r_top * x, y_top, r_top * z); // Outer-top
 		const p3 = new THREE.Vector3(0, y_top, 0); // Center-top
 
 		const geometry = new THREE.BufferGeometry();
@@ -462,22 +436,25 @@ export class HSLColorSpace extends ColorSpace {
 			p0.x,
 			p0.y,
 			p0.z,
-			p1.x,
-			p1.y,
-			p1.z,
+
 			p2.x,
 			p2.y,
 			p2.z,
 
+			p1.x,
+			p1.y,
+			p1.z,
+
 			p0.x,
 			p0.y,
 			p0.z,
-			p2.x,
-			p2.y,
-			p2.z,
+
 			p3.x,
 			p3.y,
 			p3.z,
+			p2.x,
+			p2.y,
+			p2.z,
 		]);
 		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 		geometry.computeVertexNormals(); // Important for proper lighting

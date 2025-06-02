@@ -18,4 +18,4 @@ export const MAX_VISUAL_RADIUS_AT_MID = 0.5;
 
 // Other constants can be added here as needed
 
-export const initialModel = 'HSV';
+export const initialModel = 'HSL';
