@@ -205,6 +205,36 @@ export class HSLColorSpace extends ColorSpace {
 		return mesh;
 	}
 
+	_createHSLHalfVolume(lMin, lMax, sMin, sMax, hMin, hMax) {
+		lMin = Math.min(lMin, lMax);
+		sMin = Math.min(sMin, sMax);
+		hMin = Math.min(hMin, hMax);
+
+		const hRange = hMax - hMin;
+
+		let phiStart = hMin * Math.PI * 2;
+		let phiLength = hRange * Math.PI * 2;
+
+		const p1A = new THREE.Vector2(0, 1);
+		const p1B = new THREE.Vector2(1, 1);
+		const p2A = new THREE.Vector2(1, 0);
+		const p2B = new THREE.Vector2(0, 0);
+
+		let points = [p1A, p1B, p2B, p2A, p1A];
+
+		let lRange = lMax - lMin;
+		let sRange = sMax - sMin;
+		points.forEach((point) => {
+			point.y *= lRange + lMin;
+			point.x *= sRange + sMin;
+			point.x *= 1 - point.y; // compress x as y increases
+		});
+
+		const geometry = new THREE.LatheGeometry(points, 128, phiStart, phiLength);
+
+		return geometry;
+	}
+
 	_updateSubSpaceVolume(limits) {
 		console.log(`Updating HSL SubSpace Volume with limits:`, limits);
 
@@ -229,138 +259,32 @@ export class HSLColorSpace extends ColorSpace {
 		const volumeMeshGroup = new THREE.Group();
 		volumeMeshGroup.name = 'subspaceVolume';
 
-		const l_min_limit = limits.l.min;
-		const l_max_limit = limits.l.max;
-		const s_min_limit = limits.s.min;
-		const s_max_limit = limits.s.max;
+		let lMin = limits.l.min; // 0 a 1, 0.5 en el centro
+		let lMax = limits.l.max; // 0 a 1
+		let sMin = limits.s.min;
+		let sMax = limits.s.max;
+		let hMin = limits.h.min;
+		let hMax = limits.h.max;
 
-		const h_min_rad = THREE.MathUtils.degToRad(limits.h.min * 360);
-		const h_length_rad = THREE.MathUtils.degToRad((limits.h.max - limits.h.min) * 360);
-		const h_end_rad = h_min_rad + h_length_rad;
+		if (lMax > 0.5) {
+			// draw the top cone
+			// hMin should be in the range of 0 and hMax
+			let l2Max = (lMax - 0.5) * 2;
+			let l2Min = (Math.max(0.5, lMin) - 0.5) * 2;
 
-		const fullCircle = Math.abs(h_length_rad - 2.0 * Math.PI) < 0.001;
-
-		// Lower segment (from l_min_limit up to L_MID_POINT or l_max_limit)
-		if (l_min_limit < L_MID_POINT && s_max_limit > 0.001) {
-			const segmentLTop = Math.min(L_MID_POINT, l_max_limit);
-			const heightLower = segmentLTop - l_min_limit;
-
-			if (heightLower > 0.001) {
-				const radiusBottomOuter = this._getRadiusAtL(l_min_limit, s_max_limit);
-				const radiusTopOuter = this._getRadiusAtL(segmentLTop, s_max_limit);
-
-				const lowerCylinderMesh = this._createHslCylinderSegmentMesh(
-					{
-						yBase: l_min_limit,
-						height: heightLower,
-						radiusTop: radiusTopOuter,
-						radiusBottom: radiusBottomOuter,
-						h_min_rad: h_min_rad,
-						h_length_rad: h_length_rad,
-						radialSegments: RADIAL_SEGMENTS,
-						heightSegments: HEIGHT_SEGMENTS,
-					},
-					shaderMaterial
-				);
-				volumeMeshGroup.add(lowerCylinderMesh);
-
-				if (!fullCircle) {
-					const capParams = {
-						y_bottom: l_min_limit,
-						y_top: segmentLTop,
-						r_bottom: radiusBottomOuter,
-						r_top: radiusTopOuter,
-					};
-					volumeMeshGroup.add(
-						this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
-					);
-					volumeMeshGroup.add(
-						this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
-					);
-				}
-			}
+			const geometry = this._createHSLHalfVolume(l2Min, l2Max, sMin, sMax, hMin, hMax);
+			const lathe = new THREE.Mesh(geometry, shaderMaterial);
+			volumeMeshGroup.add(lathe);
 		}
 
-		// Upper segment (from L_MID_POINT or l_min_limit up to l_max_limit)
-		if (l_max_limit > L_MID_POINT && s_max_limit > 0.001) {
-			const segmentLBottom = Math.max(L_MID_POINT, l_min_limit);
-			const heightUpper = l_max_limit - segmentLBottom;
-
-			if (heightUpper > 0.001) {
-				const radiusBottomOuter = this._getRadiusAtL(segmentLBottom, s_max_limit);
-				const radiusTopOuter = this._getRadiusAtL(l_max_limit, s_max_limit);
-
-				const upperCylinderMesh = this._createHslCylinderSegmentMesh(
-					{
-						yBase: segmentLBottom,
-						height: heightUpper,
-						radiusTop: radiusTopOuter,
-						radiusBottom: radiusBottomOuter,
-						h_min_rad: h_min_rad,
-						h_length_rad: h_length_rad,
-						radialSegments: RADIAL_SEGMENTS,
-						heightSegments: HEIGHT_SEGMENTS,
-					},
-					shaderMaterial
-				);
-				//volumeMeshGroup.add(upperCylinderMesh);
-
-				if (!fullCircle) {
-					const capParams = {
-						y_bottom: segmentLBottom,
-						y_top: l_max_limit,
-						r_bottom: radiusBottomOuter,
-						r_top: radiusTopOuter,
-					};
-					volumeMeshGroup
-						.add
-						//this._createSideCapMesh({ ...capParams, angle_rad: h_min_rad }, shaderMaterial)
-						();
-					volumeMeshGroup
-						.add
-						//this._createSideCapMesh({ ...capParams, angle_rad: h_end_rad }, shaderMaterial)
-						();
-				}
-			}
-		}
-
-		// End Caps (Top and Bottom)
-		if (s_max_limit > 0.001) {
-			// Bottom Cap
-			if (l_min_limit > 0.001) {
-				const radiusOuter_lmin = this._getRadiusAtL(l_min_limit, s_max_limit);
-				const radiusInner_lmin = this._getRadiusAtL(l_min_limit, s_min_limit);
-				const bottomCap = this._createEndCapMesh(
-					{
-						yPos: l_min_limit,
-						innerRadius: radiusInner_lmin,
-						outerRadius: radiusOuter_lmin,
-						h_min_rad: h_min_rad,
-						h_length_rad: h_length_rad,
-						radialSegments: RADIAL_SEGMENTS,
-					},
-					shaderMaterial
-				);
-				//if (bottomCap) volumeMeshGroup.add(bottomCap);
-			}
-
-			// Top Cap
-			if (l_max_limit < 0.999) {
-				const radiusOuter_lmax = this._getRadiusAtL(l_max_limit, s_max_limit);
-				const radiusInner_lmax = this._getRadiusAtL(l_max_limit, s_min_limit);
-				const topCap = this._createEndCapMesh(
-					{
-						yPos: l_max_limit,
-						innerRadius: radiusInner_lmax,
-						outerRadius: radiusOuter_lmax,
-						h_min_rad: h_min_rad,
-						h_length_rad: h_length_rad,
-						radialSegments: RADIAL_SEGMENTS,
-					},
-					shaderMaterial
-				);
-				//if (topCap) volumeMeshGroup.add(topCap);
-			}
+		if (lMin < 0.5) {
+			// draw the bottom cone
+			let l2Max = (1 - lMin - 0.5) * 2;
+			let l2Min = (Math.max(0.5, 1 - lMax) - 0.5) * 2;
+			const geometry = this._createHSLHalfVolume(l2Min, l2Max, sMin, sMax, hMin, hMax);
+			geometry.rotateX(Math.PI);
+			const lathe = new THREE.Mesh(geometry, shaderMaterial);
+			volumeMeshGroup.add(lathe);
 		}
 
 		this.currentVisuals.add(volumeMeshGroup);
