@@ -3,7 +3,7 @@ import {
   Mesh, MeshNormalMaterial, Vector3, DoubleSide
 } from 'three';
 
-import { ParametricSurfaceGeometry } from './parametricSurfaceGeometry.js';
+import { ParametricSurfaceGeometry } from './ParametricSurfaceGeometry.js';
 import { VertexNormalsHelper } from 'three/examples/jsm/helpers/VertexNormalsHelper';
 
 /**

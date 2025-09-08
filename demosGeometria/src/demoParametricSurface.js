@@ -8,10 +8,6 @@ import { ParametricSurfaceGeometry } from './ParametricSurfaceGeometry.js';
 import * as dat from 'dat.gui';
 let scene, camera, renderer, container, group;
 
-const params = {
-	currentSurface: 'torus', //plane, waves, torus
-	showWireframe: false,
-};
 
 function setupThreeJs() {
 	container = document.getElementById('container3D');
@@ -54,20 +50,6 @@ function onResize() {
 	camera.updateProjectionMatrix();
 
 	renderer.setSize(container.offsetWidth, container.offsetHeight);
-}
-
-
-
-
-function createUI() {
-	const gui = new dat.GUI();
-
-	gui.add(params, 'currentSurface', ['plane', 'waves']).onChange((value) => {
-		//buildScene();
-	});
-	gui.add(params, 'showWireframe').onChange((value) => {
-		//buildScene();
-	});
 }
 
 function buildStarMesh(){
@@ -161,7 +143,7 @@ function animate() {
 
 setupThreeJs();
 
-createUI();
+
 buildSurface();
 buildStarMesh();
 animate();
