@@ -34,8 +34,9 @@ function setupThreeJs() {
 	let pointLightHelper = new THREE.PointLightHelper(pointLight, 0.2);
 	scene.add(pointLightHelper);
 
+	
 	const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.25);
-	//scene.add(hemisphereLight);
+	scene.add(hemisphereLight);
 
 	const gridHelper = new THREE.GridHelper(5, 5);
 	scene.add(gridHelper);
@@ -52,11 +53,14 @@ function onResize() {
 }
 
 function buildScene() {
-	const geo = createCylinder(1, 3, 16, 3);
+
+	// Cilindro abierto
+	const geo = createCylinder(1, 3, 32, 10);
+	// Cilindro cerrado
 	//const geo = createClosedCylinder(1, 3, 12, 3);
 	const defaultMaterial = new THREE.MeshPhongMaterial({
 		color: 0xff9900,
-		side: THREE.DoubleSide,
+		side: THREE.FrontSide,
 		wireframe: false,
 		shininess: 100,
 		flatShading: false,
@@ -68,16 +72,15 @@ function buildScene() {
 
 	let normalMeshHelper = new VertexNormalsHelper(cylinder, 0.2, 0x00ff00, 1);
 	//scene.add(normalMeshHelper);
-
 	//scene.add(cylinder);
 
+	// esfera
 	const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
-	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: true });
+	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: false });
 	const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
 
 	let sphereNormalHelper = new VertexNormalsHelper(sphere, 0.2, 0x00ff00, 1);
 	scene.add(sphereNormalHelper);
-
 	scene.add(sphere);
 }
 

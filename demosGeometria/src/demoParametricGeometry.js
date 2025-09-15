@@ -142,7 +142,7 @@ function buildScene() {
 function createUI() {
 	const gui = new dat.GUI();
 
-	gui.add(params, 'currentSurface', ['plane', 'waves']).onChange((value) => {
+	gui.add(params, 'currentSurface', ['plane', 'waves',"torus"]).onChange((value) => {
 		buildScene();
 	});
 	gui.add(params, 'showWireframe').onChange((value) => {
