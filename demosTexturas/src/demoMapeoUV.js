@@ -93,8 +93,8 @@ function animate() {
 
 	let tex = textures['caballo'].object;
 
-	//tex.offset;
-	//tex.repeat;
+	tex.offset.set(0.6, 0.5);
+	tex.repeat.set(0.25, 0.25);
 
 	renderer.render(scene, camera);
 }

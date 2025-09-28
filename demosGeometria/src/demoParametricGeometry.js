@@ -82,7 +82,7 @@ function getParametricWavesFunction(width, height, freq1 = 3, amplitude = 1) {
 }
 
 // Torus
-function getParametricTorusFunction(radio1, radio2, from = 0, to = Math.PI * 2, freq = 40, amplitude = 0) {
+function getParametricTorusFunction(radio1, radio2, from = 0, to = Math.PI * 2, freq = 40, amplitude = 0.1) {
 	return function (u, v, target) {
 		// basado en u,v obtener el punto x,y,z de un toroide
 		const theta = 2 * Math.PI * u;
@@ -123,7 +123,7 @@ function buildScene() {
 			samplingFunction = getParametricWavesFunction(10, 10);
 			break;
 		case 'torus':
-			samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4);
+			samplingFunction = getParametricTorusFunction(4, 0.5, 0, (2 * Math.PI * 3) / 4);
 			//samplingFunction = getParametricTorusFunction(4, 1, 0, (2 * Math.PI * 3) / 4, 40, 0.5);
 			break;
 	}
@@ -142,7 +142,7 @@ function buildScene() {
 function createUI() {
 	const gui = new dat.GUI();
 
-	gui.add(params, 'currentSurface', ['plane', 'waves',"torus"]).onChange((value) => {
+	gui.add(params, 'currentSurface', ['plane', 'waves', 'torus']).onChange((value) => {
 		buildScene();
 	});
 	gui.add(params, 'showWireframe').onChange((value) => {
