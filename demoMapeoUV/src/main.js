@@ -42,8 +42,8 @@ createScene();
 // radio: número (requerido)
 // altura: número (requerido)
 // radialSegments: número (opcional, default 64)
+
 function makeSplitCylinder(radius, height, radialSegments = 64) {
-	// --- PAREDES ---
 	const walls = new THREE.CylinderGeometry(
 		radius, // radiusTop
 		radius, // radiusBottom
@@ -86,7 +86,7 @@ function makeSplitCylinder(radius, height, radialSegments = 64) {
 }
 
 function createScene() {
-	const light = new THREE.DirectionalLight(0xffffff, 1);
+	const light = new THREE.DirectionalLight(0xffffff, 2);
 
 	light.position.set(1, 1, 1);
 	scene.add(light);
@@ -114,22 +114,57 @@ function createScene() {
 	let uvs = [];
 	// walls
 	for (let i = 0; i < parts.walls.attributes.uv.count; i++) {
-		// map XY position to UV
+		// get current uv
+		let u = parts.walls.attributes.uv.getX(i);
+		let v = parts.walls.attributes.uv.getY(i);
+		// get vertex position
+		let x = parts.walls.attributes.position.getX(i);
+		let y = parts.walls.attributes.position.getY(i);
+		let z = parts.walls.attributes.position.getZ(i);
 
-		uvs.push(parts.walls.attributes.uv.getX(i));
-		uvs.push(parts.walls.attributes.uv.getY(i));
+		// definir aqui el mapeo UV para las paredes
+		u = x;
+		v = 0;
+
+		uvs.push(u);
+		uvs.push(v);
 	}
 	// top
 	for (let i = 0; i < parts.caps.top.attributes.uv.count; i++) {
-		uvs.push(parts.caps.top.attributes.uv.getX(i));
-		uvs.push(parts.caps.top.attributes.uv.getY(i));
+		// get current uv
+		let u = parts.caps.top.attributes.uv.getX(i);
+		let v = parts.caps.top.attributes.uv.getY(i);
+		// get vertex position
+		let x = parts.caps.top.attributes.position.getX(i);
+		let y = parts.caps.top.attributes.position.getY(i);
+		let z = parts.caps.top.attributes.position.getZ(i);
+
+		// definir aqui el mapeo UV para la tapa superior
+		u = x;
+		v = 0;
+
+		uvs.push(u);
+		uvs.push(v);
 	}
 	// bottom
 	for (let i = 0; i < parts.caps.bottom.attributes.uv.count; i++) {
-		uvs.push(parts.caps.bottom.attributes.uv.getX(i));
-		uvs.push(parts.caps.bottom.attributes.uv.getY(i));
+		// get current uv
+		let u = parts.caps.bottom.attributes.uv.getX(i);
+		let v = parts.caps.bottom.attributes.uv.getY(i);
+		// get vertex position
+		let x = parts.caps.bottom.attributes.position.getX(i);
+		let y = parts.caps.bottom.attributes.position.getY(i);
+		let z = parts.caps.bottom.attributes.position.getZ(i);
+
+		// definir aqui el mapeo UV para la tapa inferior
+		u = x;
+		v = 0;
+
+		uvs.push(u);
+		uvs.push(v);
 	}
 	geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
 	console.log('total vertices:', geometry.attributes.position.count);
 	// load /maps/cap_map.jpg and wall_map.jpg as textures
 	let textureLoader = new THREE.TextureLoader();
@@ -140,9 +175,13 @@ function createScene() {
 	uvTexture.wrapS = THREE.RepeatWrapping;
 	uvTexture.wrapT = THREE.RepeatWrapping;
 
-	let cylinder = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ color: 0xffffff, map: uvTexture }));
+	let cylinder = new THREE.Mesh(
+		geometry,
+		new THREE.MeshPhongMaterial({ color: 0xffffff, map: uvTexture, emissive: 0x555555 })
+	);
 	cylinder.position.set(0, 1.2, 0);
 	cylinder.rotation.x = Math.PI / 2;
 	scene.add(cylinder);
 }
+
 animate();
