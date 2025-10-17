@@ -1,4 +1,4 @@
-uniform float hMin, hMax, sMin, sMax, vMin, vMax; // angles in degrees, rest 0-1
+uniform float hMin, hMax, sMin, sMax, vMin, vMax; // hMin/hMax in degrees, others 0-1
 varying vec3 vWorldPosition;
 varying vec3 vLocalPosition;
 
@@ -23,10 +23,17 @@ void main() {
     // This handles the angular segment (hMin/hMax) and creates a tube if sMin > 0.
     // The geometry is built to sMax and [vMin, vMax], so current_S > sMax or current_V < vMin or current_V > vMax
     // should generally not occur for fragments on the geometry surface itself, but this ensures strict adherence.
-    if (H_angle_deg < hMin || H_angle_deg > hMax ||
+    bool hueOutside;
+    if (hMax >= hMin) {
+        hueOutside = (H_angle_deg < hMin || H_angle_deg > hMax);
+    } else {
+        hueOutside = (H_angle_deg > hMax && H_angle_deg < hMin);
+    }
+
+    if (hueOutside ||
         current_S < sMin || current_S > sMax ||
         current_V < vMin || current_V > vMax) {
-        //discard;
+        discard;
     }
 
     // For hsv2rgb, H should be [0,1], S and V are the actual saturation/value of the color [0,1].
