@@ -154,258 +154,258 @@ export class HSLColorSpace extends ColorSpace {
 		}
 	}
 
-	// Helper to calculate radius at a given L value and saturation scaling
-	_getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
-		let radius_at_s1;
-		if (l_value <= L_MID_POINT) {
-			radius_at_s1 = (l_value / L_MID_POINT) * MAX_VISUAL_RADIUS_AT_MID;
-		} else {
-			radius_at_s1 = ((1 - l_value) / (1 - L_MID_POINT)) * MAX_VISUAL_RADIUS_AT_MID;
-		}
-		return Math.max(0, radius_at_s1 * s_value_for_radius_scaling);
-	}
+        // Helper to calculate radius at a given L value and saturation scaling
+        _getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
+                let radius_at_s1;
+                if (l_value <= L_MID_POINT) {
+                        radius_at_s1 = (l_value / L_MID_POINT) * MAX_VISUAL_RADIUS_AT_MID;
+                } else {
+                        radius_at_s1 = ((1 - l_value) / (1 - L_MID_POINT)) * MAX_VISUAL_RADIUS_AT_MID;
+                }
+                return Math.max(0, radius_at_s1 * s_value_for_radius_scaling);
+        }
 
-	// Helper to create cylinder segment for HSL shape
-	_createHslCylinderSegmentMesh(params, material) {
-		const geometry = new THREE.CylinderGeometry(
-			params.radiusTop,
-			params.radiusBottom,
-			params.height,
-			params.radialSegments,
-			params.heightSegments,
-			false, // openEnded
-			params.h_min_rad,
-			params.h_length_rad
-		);
-		const mesh = new THREE.Mesh(geometry, material);
-		mesh.position.set(0, params.yBase + params.height / 2, 0);
-		return mesh;
-	}
+        _createRadialSurfaceMesh(limits, saturationValue, hMin, hMax, material) {
+                if (saturationValue <= 0) return null;
 
-	// Helper to create circular end caps for HSL shape
-	_createEndCapMesh(params, material) {
-		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
+                const { l } = limits;
+                const lMin = l.min;
+                const lMax = l.max;
 
-		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
+                if (lMax <= lMin) return null;
 
-		// Ensure innerRadius is less than outerRadius
-		const actualInnerRadius = Math.min(innerRadius, outerRadius - 0.0001);
+                const hueRange = Math.max(0, hMax - hMin);
+                if (hueRange <= 0) return null;
 
-		const geometry = new THREE.RingGeometry(
-			Math.max(0, actualInnerRadius), // innerRadius cannot be negative
-			outerRadius,
-			radialSegments,
-			1, // thetaSegments for RingGeometry
-			h_min_rad,
-			h_length_rad
-		);
-		const mesh = new THREE.Mesh(geometry, material);
-		mesh.position.set(0, yPos, 0);
-		mesh.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-		return mesh;
-	}
+                const radialSegments = Math.max(1, Math.floor(RADIAL_SEGMENTS * hueRange));
+                const positions = [];
 
-	_createHSLHalfVolume(lMin, lMax, sMin, sMax, hMin, hMax) {
-		lMin = Math.min(lMin, lMax);
-		sMin = Math.min(sMin, sMax);
-		hMin = Math.min(hMin, hMax);
+                for (let i = 0; i < HEIGHT_SEGMENTS; i++) {
+                        const t0 = i / HEIGHT_SEGMENTS;
+                        const t1 = (i + 1) / HEIGHT_SEGMENTS;
+                        const l0 = THREE.MathUtils.lerp(lMin, lMax, t0);
+                        const l1 = THREE.MathUtils.lerp(lMin, lMax, t1);
+                        const r0 = this._getRadiusAtL(l0, saturationValue);
+                        const r1 = this._getRadiusAtL(l1, saturationValue);
 
-		const hRange = hMax - hMin;
+                        for (let j = 0; j < radialSegments; j++) {
+                                const s0 = j / radialSegments;
+                                const s1 = (j + 1) / radialSegments;
+                                const h0 = THREE.MathUtils.lerp(hMin, hMax, s0) * Math.PI * 2;
+                                const h1 = THREE.MathUtils.lerp(hMin, hMax, s1) * Math.PI * 2;
 
-		let phiStart = hMin * Math.PI * 2;
-		let phiLength = hRange * Math.PI * 2;
+                                const cos0 = Math.cos(h0);
+                                const sin0 = Math.sin(h0);
+                                const cos1 = Math.cos(h1);
+                                const sin1 = Math.sin(h1);
 
-		const p1A = new THREE.Vector2(0, 1);
-		const p1B = new THREE.Vector2(1, 1);
-		const p2A = new THREE.Vector2(1, 0);
-		const p2B = new THREE.Vector2(0, 0);
+                                const x00 = r0 * cos0;
+                                const z00 = r0 * sin0;
+                                const x01 = r0 * cos1;
+                                const z01 = r0 * sin1;
+                                const x10 = r1 * cos0;
+                                const z10 = r1 * sin0;
+                                const x11 = r1 * cos1;
+                                const z11 = r1 * sin1;
 
-		let points = [p1A, p1B, p2B, p2A, p1A];
+                                positions.push(
+                                        x00,
+                                        l0,
+                                        z00,
+                                        x01,
+                                        l0,
+                                        z01,
+                                        x11,
+                                        l1,
+                                        z11,
 
-		let lRange = lMax - lMin;
-		let sRange = sMax - sMin;
-		points.forEach((point) => {
-			point.y *= lRange + lMin;
-			point.x *= sRange + sMin;
-			point.x *= 1 - point.y; // compress x as y increases
-		});
+                                        x00,
+                                        l0,
+                                        z00,
+                                        x11,
+                                        l1,
+                                        z11,
+                                        x10,
+                                        l1,
+                                        z10
+                                );
+                        }
+                }
 
-		const geometry = new THREE.LatheGeometry(points, 128, phiStart, phiLength);
+                if (positions.length === 0) return null;
 
-		return geometry;
-	}
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.computeVertexNormals();
 
-	_updateSubSpaceVolume(limits) {
-		console.log(`Updating HSL SubSpace Volume with limits:`, limits);
+                return new THREE.Mesh(geometry, material);
+        }
 
-		// Remove previous subspace volume if it exists
-		this._disposeVisuals(this.currentVisuals.getObjectByName('subspaceVolume'));
-		// Create shader material for the HSL subspace visualization
-		const shaderMaterial = new THREE.ShaderMaterial({
-			vertexShader: hslVertexShader,
-			fragmentShader: hslFragmentShader,
-			uniforms: {
-				h_min: { value: limits.h.min },
-				h_max: { value: limits.h.max },
-				s_min: { value: limits.s.min },
-				s_max: { value: limits.s.max },
-				l_min: { value: limits.l.min },
-				l_max: { value: limits.l.max },
-			},
-			transparent: true,
-			side: THREE.DoubleSide,
-		});
+        _createLightnessCap(lValue, sMin, sMax, hMin, hMax, material) {
+                const outerRadius = this._getRadiusAtL(lValue, sMax);
+                if (outerRadius <= 0.0001) return null;
 
-		const volumeMeshGroup = new THREE.Group();
-		volumeMeshGroup.name = 'subspaceVolume';
+                const innerRadius = Math.min(this._getRadiusAtL(lValue, sMin), outerRadius - 0.0001);
+                const thetaStart = hMin * Math.PI * 2;
+                const thetaLength = Math.max(0, hMax - hMin) * Math.PI * 2;
 
-		let lMin = limits.l.min; // 0 a 1, 0.5 en el centro
-		let lMax = limits.l.max; // 0 a 1
-		let sMin = limits.s.min;
-		let sMax = limits.s.max;
-		let hMin = limits.h.min;
-		let hMax = limits.h.max;
+                if (thetaLength <= 0) return null;
 
-		if (lMax > 0.5) {
-			// draw the top cone
-			// hMin should be in the range of 0 and hMax
-			let l2Max = (lMax - 0.5) * 2;
-			let l2Min = (Math.max(0.5, lMin) - 0.5) * 2;
+                const geometry = new THREE.RingGeometry(innerRadius, outerRadius, RADIAL_SEGMENTS, 1, thetaStart, thetaLength);
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.y = lValue;
+                return mesh;
+        }
 
-			const geometry = this._createHSLHalfVolume(l2Min, l2Max, sMin, sMax, hMin, hMax);
-			const lathe = new THREE.Mesh(geometry, shaderMaterial);
-			volumeMeshGroup.add(lathe);
-		}
+        _createHueBoundarySurface(limits, hueValue, material) {
+                const { l, s } = limits;
+                const lMin = l.min;
+                const lMax = l.max;
+                const hueAngle = hueValue * Math.PI * 2;
 
-		if (lMin < 0.5) {
-			// draw the bottom cone
-			let l2Max = (1 - lMin - 0.5) * 2;
-			let l2Min = (Math.max(0.5, 1 - lMax) - 0.5) * 2;
-			const geometry = this._createHSLHalfVolume(l2Min, l2Max, sMin, sMax, hMin, hMax);
-			geometry.rotateX(Math.PI);
-			const lathe = new THREE.Mesh(geometry, shaderMaterial);
-			volumeMeshGroup.add(lathe);
-		}
+                if (lMax <= lMin) return null;
 
-		this.currentVisuals.add(volumeMeshGroup);
-		console.log('HSL SubSpace Volume updated. Group contains:', volumeMeshGroup.children.length, 'meshes.');
-	}
+                const cosAngle = Math.cos(hueAngle);
+                const sinAngle = Math.sin(hueAngle);
+                const positions = [];
+                const EPS = 0.0001;
 
-	// Helper method to dispose of visuals and their resources
-	_disposeVisuals(object3D) {
-		if (object3D) {
-			object3D.traverse((child) => {
-				if (child.isMesh) {
-					if (child.geometry) {
-						child.geometry.dispose();
-					}
-					if (child.material) {
-						if (Array.isArray(child.material)) {
-							child.material.forEach((material) => material.dispose());
-						} else {
-							child.material.dispose();
-						}
-					}
-				}
-			});
-			if (object3D.parent) {
-				object3D.parent.remove(object3D);
-			}
-		}
-	}
+                for (let i = 0; i < HEIGHT_SEGMENTS; i++) {
+                        const t0 = i / HEIGHT_SEGMENTS;
+                        const t1 = (i + 1) / HEIGHT_SEGMENTS;
+                        const l0 = THREE.MathUtils.lerp(lMin, lMax, t0);
+                        const l1 = THREE.MathUtils.lerp(lMin, lMax, t1);
 
-	// Helper to calculate radius at a given L value and saturation scaling
-	_getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
-		let radius_at_s1;
-		if (l_value <= L_MID_POINT) {
-			radius_at_s1 = (l_value / L_MID_POINT) * MAX_VISUAL_RADIUS_AT_MID;
-		} else {
-			radius_at_s1 = ((1 - l_value) / (1 - L_MID_POINT)) * MAX_VISUAL_RADIUS_AT_MID;
-		}
-		return Math.max(0, radius_at_s1 * s_value_for_radius_scaling);
-	}
+                        const outer0 = this._getRadiusAtL(l0, s.max);
+                        const outer1 = this._getRadiusAtL(l1, s.max);
+                        const inner0 = this._getRadiusAtL(l0, s.min);
+                        const inner1 = this._getRadiusAtL(l1, s.min);
 
-	// Helper to create cylinder segment for HSL shape
-	_createHslCylinderSegmentMesh(params, material) {
-		const geometry = new THREE.CylinderGeometry(
-			params.radiusTop,
-			params.radiusBottom,
-			params.height,
-			params.radialSegments,
-			params.heightSegments,
-			false, // openEnded
-			params.h_min_rad,
-			params.h_length_rad
-		);
-		const mesh = new THREE.Mesh(geometry, material);
-		mesh.position.set(0, params.yBase + params.height / 2, 0);
-		return mesh;
-	}
+                        const hasOuter = outer0 > EPS || outer1 > EPS;
+                        const hasInner = inner0 > EPS || inner1 > EPS;
 
-	// Helper to create side cap for HSL shape when not full circle
-	_createSideCapMesh(params, material) {
-		let { y_bottom, y_top, r_bottom, r_top, angle_rad } = params;
+                        if (!hasOuter) {
+                                continue;
+                        }
 
-		//angle_rad += Math.PI / 2;
-		let x = Math.cos(angle_rad);
-		let z = Math.sin(angle_rad);
+                        if (hasInner) {
+                                positions.push(
+                                        inner0 * cosAngle,
+                                        l0,
+                                        inner0 * sinAngle,
+                                        outer0 * cosAngle,
+                                        l0,
+                                        outer0 * sinAngle,
+                                        outer1 * cosAngle,
+                                        l1,
+                                        outer1 * sinAngle,
 
-		const p0 = new THREE.Vector3(0, y_bottom, 0); // Center-bottom
-		const p1 = new THREE.Vector3(r_bottom * x, y_bottom, r_bottom * z); // Outer-bottom
-		const p2 = new THREE.Vector3(r_top * x, y_top, r_top * z); // Outer-top
-		const p3 = new THREE.Vector3(0, y_top, 0); // Center-top
+                                        inner0 * cosAngle,
+                                        l0,
+                                        inner0 * sinAngle,
+                                        outer1 * cosAngle,
+                                        l1,
+                                        outer1 * sinAngle,
+                                        inner1 * cosAngle,
+                                        l1,
+                                        inner1 * sinAngle
+                                );
+                        } else {
+                                positions.push(
+                                        0,
+                                        l0,
+                                        0,
+                                        outer0 * cosAngle,
+                                        l0,
+                                        outer0 * sinAngle,
+                                        outer1 * cosAngle,
+                                        l1,
+                                        outer1 * sinAngle,
 
-		const geometry = new THREE.BufferGeometry();
-		const vertices = new Float32Array([
-			p0.x,
-			p0.y,
-			p0.z,
+                                        0,
+                                        l0,
+                                        0,
+                                        outer1 * cosAngle,
+                                        l1,
+                                        outer1 * sinAngle,
+                                        0,
+                                        l1,
+                                        0
+                                );
+                        }
+                }
 
-			p2.x,
-			p2.y,
-			p2.z,
+                if (positions.length === 0) return null;
 
-			p1.x,
-			p1.y,
-			p1.z,
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.computeVertexNormals();
 
-			p0.x,
-			p0.y,
-			p0.z,
+                return new THREE.Mesh(geometry, material);
+        }
 
-			p3.x,
-			p3.y,
-			p3.z,
-			p2.x,
-			p2.y,
-			p2.z,
-		]);
-		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-		geometry.computeVertexNormals(); // Important for proper lighting
-		return new THREE.Mesh(geometry, material);
-	}
+        _updateSubSpaceVolume(limits) {
+                console.log(`Updating HSL SubSpace Volume with limits:`, limits);
 
-	// Helper to create circular end caps for HSL shape
-	_createEndCapMesh(params, material) {
-		const { yPos, innerRadius, outerRadius, h_min_rad, h_length_rad, radialSegments } = params;
+                this._disposeVisuals(this.currentVisuals.getObjectByName('subspaceVolume'));
 
-		if (outerRadius <= 0.001) return null; // No cap if radius is negligible
+                const shaderMaterial = new THREE.ShaderMaterial({
+                        vertexShader: hslVertexShader,
+                        fragmentShader: hslFragmentShader,
+                        uniforms: {
+                                h_min: { value: limits.h.min },
+                                h_max: { value: limits.h.max },
+                                s_min: { value: limits.s.min },
+                                s_max: { value: limits.s.max },
+                                l_min: { value: limits.l.min },
+                                l_max: { value: limits.l.max },
+                        },
+                        transparent: true,
+                        side: THREE.DoubleSide,
+                });
 
-		// Ensure innerRadius is less than outerRadius
-		const actualInnerRadius = Math.min(innerRadius, outerRadius - 0.0001);
+                const volumeMeshGroup = new THREE.Group();
+                volumeMeshGroup.name = 'subspaceVolume';
 
-		const geometry = new THREE.RingGeometry(
-			Math.max(0, actualInnerRadius), // innerRadius cannot be negative
-			outerRadius,
-			radialSegments,
-			1, // thetaSegments for RingGeometry
-			h_min_rad,
-			h_length_rad
-		);
+                const { l, s, h } = limits;
+                const hueRange = Math.max(0, h.max - h.min);
 
-		const mesh = new THREE.Mesh(geometry, material);
-		mesh.rotation.x = -Math.PI / 2; // Rotate to XZ plane
-		mesh.position.set(0, yPos, 0);
-		return mesh;
-	}
+                const outerSurface = this._createRadialSurfaceMesh(limits, s.max, h.min, h.max, shaderMaterial);
+                if (outerSurface) {
+                        volumeMeshGroup.add(outerSurface);
+                }
+
+                if (s.min > 0.0001) {
+                        const innerSurface = this._createRadialSurfaceMesh(limits, s.min, h.min, h.max, shaderMaterial);
+                        if (innerSurface) {
+                                volumeMeshGroup.add(innerSurface);
+                        }
+                }
+
+                const lowerCap = this._createLightnessCap(l.min, s.min, s.max, h.min, h.max, shaderMaterial);
+                if (lowerCap) {
+                        volumeMeshGroup.add(lowerCap);
+                }
+
+                const upperCap = this._createLightnessCap(l.max, s.min, s.max, h.min, h.max, shaderMaterial);
+                if (upperCap) {
+                        volumeMeshGroup.add(upperCap);
+                }
+
+                if (hueRange > 0 && hueRange < 1) {
+                        const minHueSurface = this._createHueBoundarySurface(limits, h.min, shaderMaterial);
+                        if (minHueSurface) {
+                                volumeMeshGroup.add(minHueSurface);
+                        }
+
+                        const maxHueSurface = this._createHueBoundarySurface(limits, h.max, shaderMaterial);
+                        if (maxHueSurface) {
+                                volumeMeshGroup.add(maxHueSurface);
+                        }
+                }
+
+                this.currentVisuals.add(volumeMeshGroup);
+                console.log('HSL SubSpace Volume updated. Group contains:', volumeMeshGroup.children.length, 'meshes.');
+        }
 }
