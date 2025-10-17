@@ -188,10 +188,7 @@ export class HSVColorSpace extends ColorSpace {
                 const volumeMeshGroup = new THREE.Group();
                 volumeMeshGroup.name = 'subspaceVolume';
 
-                const cylinderRadialSegments = 64;
-                const cylinderHeightSegments = 1; // Shader handles V segments
-                const ringThetaSegments = cylinderRadialSegments;
-                const ringPhiSegments = 1;
+                const curveSegments = 128;
                 const epsilon = 0.0001;
                 const twoPi = Math.PI * 2;
 
@@ -226,127 +223,54 @@ export class HSVColorSpace extends ColorSpace {
                                 return;
                         }
 
-                        const openEndedOuter = true;
-                        const outerCylinderGeometry = new THREE.CylinderGeometry(
-                                sMax,
-                                sMax,
-                                height,
-                                cylinderRadialSegments,
-                                cylinderHeightSegments,
-                                openEndedOuter,
-                                thetaStartRad,
-                                thetaLengthRad
-                        );
-                        outerCylinderGeometry.translate(0, vMin + height / 2, 0);
-                        volumeMeshGroup.add(new THREE.Mesh(outerCylinderGeometry, hsvShaderMaterial));
+                        const cappedThetaLength = Math.min(thetaLengthRad, twoPi);
+                        const thetaEndRad = thetaStartRad + cappedThetaLength;
+
+                        const startCos = Math.cos(thetaStartRad);
+                        const startSin = Math.sin(thetaStartRad);
+                        const endCos = Math.cos(thetaEndRad);
+                        const endSin = Math.sin(thetaEndRad);
+
+                        const shape = new THREE.Shape();
 
                         if (sMin > epsilon && sMin < sMax) {
-                                const innerCylinderGeometry = new THREE.CylinderGeometry(
-                                        sMin,
-                                        sMin,
-                                        height,
-                                        cylinderRadialSegments,
-                                        cylinderHeightSegments,
-                                        true,
-                                        thetaStartRad,
-                                        thetaLengthRad
-                                );
-                                innerCylinderGeometry.translate(0, vMin + height / 2, 0);
-                                volumeMeshGroup.add(new THREE.Mesh(innerCylinderGeometry, hsvShaderMaterial));
+                                const outerStart = new THREE.Vector2(sMax * startCos, sMax * startSin);
+                                const innerEnd = new THREE.Vector2(sMin * endCos, sMin * endSin);
+                                const innerStart = new THREE.Vector2(sMin * startCos, sMin * startSin);
 
-                                const bottomRingGeometry = new THREE.RingGeometry(
-                                        sMin,
-                                        sMax,
-                                        ringThetaSegments,
-                                        ringPhiSegments,
-                                        thetaStartRad,
-                                        thetaLengthRad
-                                );
-                                bottomRingGeometry.rotateX(-Math.PI / 2);
-                                bottomRingGeometry.translate(0, vMin, 0);
-                                volumeMeshGroup.add(new THREE.Mesh(bottomRingGeometry, hsvShaderMaterial));
-
-                                const topRingGeometry = new THREE.RingGeometry(
-                                        sMin,
-                                        sMax,
-                                        ringThetaSegments,
-                                        ringPhiSegments,
-                                        thetaStartRad,
-                                        thetaLengthRad
-                                );
-                                topRingGeometry.rotateX(-Math.PI / 2);
-                                topRingGeometry.translate(0, vMax, 0);
-                                volumeMeshGroup.add(new THREE.Mesh(topRingGeometry, hsvShaderMaterial));
-                        } else if (sMin <= epsilon) {
-                                const bottomDiskGeometry = new THREE.CircleGeometry(
-                                        sMax,
-                                        ringThetaSegments,
-                                        thetaStartRad,
-                                        thetaLengthRad
-                                );
-                                bottomDiskGeometry.rotateX(-Math.PI / 2);
-                                bottomDiskGeometry.translate(0, vMin, 0);
-                                volumeMeshGroup.add(new THREE.Mesh(bottomDiskGeometry, hsvShaderMaterial));
-
-                                const topDiskGeometry = new THREE.CircleGeometry(
-                                        sMax,
-                                        ringThetaSegments,
-                                        thetaStartRad,
-                                        thetaLengthRad
-                                );
-                                topDiskGeometry.rotateX(-Math.PI / 2);
-                                topDiskGeometry.translate(0, vMax, 0);
-                                volumeMeshGroup.add(new THREE.Mesh(topDiskGeometry, hsvShaderMaterial));
+                                shape.moveTo(outerStart.x, outerStart.y);
+                                shape.absarc(0, 0, sMax, thetaStartRad, thetaEndRad, false);
+                                shape.lineTo(innerEnd.x, innerEnd.y);
+                                shape.absarc(0, 0, sMin, thetaEndRad, thetaStartRad, true);
+                                shape.lineTo(innerStart.x, innerStart.y);
+                                shape.lineTo(outerStart.x, outerStart.y);
+                        } else {
+                                const outerStart = new THREE.Vector2(sMax * startCos, sMax * startSin);
+                                shape.moveTo(0, 0);
+                                shape.lineTo(outerStart.x, outerStart.y);
+                                shape.absarc(0, 0, sMax, thetaStartRad, thetaEndRad, false);
+                                shape.lineTo(0, 0);
                         }
 
-                        if (thetaLengthRad < twoPi - epsilon) {
-                                const addRadialSurface = (angle) => {
-                                        const cosAngle = Math.cos(angle);
-                                        const sinAngle = Math.sin(angle);
-                                        const hasInnerRadius = sMin > epsilon;
-                                        const vertices = hasInnerRadius
-                                                ? [
-                                                          sMin * cosAngle,
-                                                          vMin,
-                                                          sMin * sinAngle,
-                                                          sMin * cosAngle,
-                                                          vMax,
-                                                          sMin * sinAngle,
-                                                          sMax * cosAngle,
-                                                          vMax,
-                                                          sMax * sinAngle,
-                                                          sMax * cosAngle,
-                                                          vMin,
-                                                          sMax * sinAngle,
-                                                  ]
-                                                : [
-                                                          0,
-                                                          vMin,
-                                                          0,
-                                                          0,
-                                                          vMax,
-                                                          0,
-                                                          sMax * cosAngle,
-                                                          vMax,
-                                                          sMax * sinAngle,
-                                                          sMax * cosAngle,
-                                                          vMin,
-                                                          sMax * sinAngle,
-                                                  ];
+                        shape.closePath();
 
-                                        const radialGeometry = new THREE.BufferGeometry();
-                                        radialGeometry.setAttribute(
-                                                'position',
-                                                new THREE.Float32BufferAttribute(vertices, 3)
-                                        );
-                                        radialGeometry.setIndex([0, 1, 2, 0, 2, 3]);
-                                        radialGeometry.computeVertexNormals();
-                                        volumeMeshGroup.add(new THREE.Mesh(radialGeometry, hsvShaderMaterial));
-                                };
+                        const radialResolution = Math.max(
+                                3,
+                                Math.floor((cappedThetaLength / twoPi) * curveSegments)
+                        );
 
-                                addRadialSurface(thetaStartRad);
-                                addRadialSurface(thetaStartRad + thetaLengthRad);
-                        }
+                        const extrudeGeometry = new THREE.ExtrudeGeometry(shape, {
+                                depth: height,
+                                steps: 1,
+                                bevelEnabled: false,
+                                curveSegments: radialResolution,
+                        });
+
+                        extrudeGeometry.rotateX(-Math.PI / 2);
+                        extrudeGeometry.translate(0, vMin, 0);
+                        extrudeGeometry.computeVertexNormals();
+
+                        volumeMeshGroup.add(new THREE.Mesh(extrudeGeometry, hsvShaderMaterial));
                 };
 
                 hueSegments.forEach(({ start, length }) => addHueSegmentGeometry(start, length));

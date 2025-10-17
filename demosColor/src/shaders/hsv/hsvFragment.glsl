@@ -12,7 +12,9 @@ vec3 hsv2rgb(vec3 c) {
 void main() {
     // Calculate HSV from vLocalPosition (which is mapped from cylinder geometry)
     // Cylinder: y is V, radius is S, angle is H
-    float H_angle_rad = atan(vLocalPosition.z, vLocalPosition.x);
+    // Geometry is built with the hue wedge extruded along +Y and rotated so +Z points toward negative hue angles,
+    // so flip the Z component when computing the angle.
+    float H_angle_rad = atan(-vLocalPosition.z, vLocalPosition.x);
     float H_angle_deg = degrees(H_angle_rad);
     if (H_angle_deg < 0.0) H_angle_deg += 360.0;
 
