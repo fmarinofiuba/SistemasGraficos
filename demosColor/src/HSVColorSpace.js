@@ -156,114 +156,133 @@ export class HSVColorSpace extends ColorSpace {
 			});
 		}
 
-		const hsvShaderMaterial = new THREE.ShaderMaterial({
-			vertexShader: hsvVertexShader,
-			fragmentShader: hsvFragmentShader,
-			uniforms: {
-				hMin: { value: limits.h && typeof limits.h.min === 'number' ? limits.h.min : 0 },
-				hMax: { value: limits.h && typeof limits.h.max === 'number' ? limits.h.max : 360 },
-				sMin: { value: limits.s && typeof limits.s.min === 'number' ? limits.s.min : 0 },
-				sMax: { value: limits.s && typeof limits.s.max === 'number' ? limits.s.max : 1 },
-				vMin: { value: limits.v && typeof limits.v.min === 'number' ? limits.v.min : 0 },
-				vMax: { value: limits.v && typeof limits.v.max === 'number' ? limits.v.max : 1 },
-			},
-			side: THREE.DoubleSide,
-			transparent: true,
-		});
+                const clampToUnit = (value, fallback) => {
+                        const numericValue = typeof value === 'number' ? value : fallback;
+                        return THREE.MathUtils.clamp(numericValue, 0, 1);
+                };
 
-		const hMinDeg = limits.h && typeof limits.h.min === 'number' ? limits.h.min : 0;
-		const hMaxDeg = limits.h && typeof limits.h.max === 'number' ? limits.h.max : 360;
-		const sMin = limits.s && typeof limits.s.min === 'number' ? limits.s.min : 0;
-		const sMax = limits.s && typeof limits.s.max === 'number' ? limits.s.max : 1;
-		const vMin = limits.v && typeof limits.v.min === 'number' ? limits.v.min : 0;
-		const vMax = limits.v && typeof limits.v.max === 'number' ? limits.v.max : 1;
+                const hMinNorm = clampToUnit(limits.h && limits.h.min, 0);
+                const hMaxNorm = clampToUnit(limits.h && limits.h.max, 1);
+                const sMin = clampToUnit(limits.s && limits.s.min, 0);
+                const sMax = clampToUnit(limits.s && limits.s.max, 1);
+                const vMin = clampToUnit(limits.v && limits.v.min, 0);
+                const vMax = clampToUnit(limits.v && limits.v.max, 1);
 
-		const height = vMax - vMin;
-		// Use full circle for geometry, shader handles hue clipping
-		const thetaStartRad = 0;
-		const thetaLengthRad = Math.PI * 2;
+                const hsvShaderMaterial = new THREE.ShaderMaterial({
+                        vertexShader: hsvVertexShader,
+                        fragmentShader: hsvFragmentShader,
+                        uniforms: {
+                                hMin: { value: hMinNorm * 360 },
+                                hMax: { value: hMaxNorm * 360 },
+                                sMin: { value: sMin },
+                                sMax: { value: sMax },
+                                vMin: { value: vMin },
+                                vMax: { value: vMax },
+                        },
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                });
 
-		const volumeMeshGroup = new THREE.Group();
-		volumeMeshGroup.name = 'subspaceVolume';
+                const height = vMax - vMin;
 
-		const cylinderRadialSegments = 64;
-		const cylinderHeightSegments = 1; // Shader handles V segments
+                const volumeMeshGroup = new THREE.Group();
+                volumeMeshGroup.name = 'subspaceVolume';
 
-		// Outer cylinder
-		if (height > 0.001 && sMax > 0.001) {
-			const openEndedOuter = sMin > 0.0001 && sMin < sMax;
-			const outerCylinderGeometry = new THREE.CylinderGeometry(
-				sMax, // radiusTop
-				sMax, // radiusBottom
-				height,
-				cylinderRadialSegments,
-				cylinderHeightSegments,
-				openEndedOuter,
-				thetaStartRad,
-				thetaLengthRad
-			);
-			outerCylinderGeometry.translate(0, vMin + height / 2, 0);
-			const outerCylinderMesh = new THREE.Mesh(outerCylinderGeometry, hsvShaderMaterial);
-			volumeMeshGroup.add(outerCylinderMesh);
-		}
+                const cylinderRadialSegments = 64;
+                const cylinderHeightSegments = 1; // Shader handles V segments
+                const ringThetaSegments = cylinderRadialSegments;
+                const ringPhiSegments = 1;
+                const epsilon = 0.0001;
+                const twoPi = Math.PI * 2;
 
-		// Inner cylinder and Ring caps (only if sMin > 0 and creates a valid tube)
-		if (sMin > 0.0001 && sMin < sMax && height > 0.001) {
-			// Inner cylinder
-			const innerCylinderGeometry = new THREE.CylinderGeometry(
-				sMin, // radiusTop
-				sMin, // radiusBottom
-				height,
-				cylinderRadialSegments,
-				cylinderHeightSegments,
-				true, // Always openEnded for the inner tube
-				thetaStartRad,
-				thetaLengthRad
-			);
-			innerCylinderGeometry.translate(0, vMin + height / 2, 0);
-			const innerCylinderMesh = new THREE.Mesh(innerCylinderGeometry, hsvShaderMaterial);
-			volumeMeshGroup.add(innerCylinderMesh);
+                const normalizedHueDiff = hMaxNorm - hMinNorm;
+                const wrappedHueDiff = normalizedHueDiff >= 0 ? normalizedHueDiff : normalizedHueDiff + 1;
 
-			// Ring caps
-			const ringThetaSegments = cylinderRadialSegments;
-			const ringPhiSegments = 1;
+                const hueSegments = [];
 
-			// Bottom Ring
-			const bottomRingGeometry = new THREE.RingGeometry(
-				sMin, // innerRadius
-				sMax, // outerRadius
-				ringThetaSegments,
-				ringPhiSegments,
-				thetaStartRad,
-				thetaLengthRad
-			);
-			bottomRingGeometry.rotateX(-Math.PI / 2); // Orient it flat on XZ plane
-			bottomRingGeometry.translate(0, vMin, 0); // Position it at the bottom
-			const bottomRingMesh = new THREE.Mesh(bottomRingGeometry, hsvShaderMaterial);
-			volumeMeshGroup.add(bottomRingMesh);
+                if (height > epsilon && sMax > epsilon) {
+                        if (Math.abs(normalizedHueDiff) < epsilon && wrappedHueDiff < epsilon) {
+                                console.log('HSV subspace hue range collapsed; skipping volume creation.');
+                        } else if (Math.abs(wrappedHueDiff - 1) < epsilon) {
+                                hueSegments.push({ start: 0, length: twoPi });
+                        } else if (normalizedHueDiff >= 0) {
+                                hueSegments.push({ start: hMinNorm * twoPi, length: wrappedHueDiff * twoPi });
+                        } else {
+                                hueSegments.push({ start: hMinNorm * twoPi, length: (1 - hMinNorm) * twoPi });
+                                if (hMaxNorm > epsilon) {
+                                        hueSegments.push({ start: 0, length: hMaxNorm * twoPi });
+                                }
+                        }
+                }
 
-			// Top Ring
-			const topRingGeometry = new THREE.RingGeometry(
-				sMin, // innerRadius
-				sMax, // outerRadius
-				ringThetaSegments,
-				ringPhiSegments,
-				thetaStartRad,
-				thetaLengthRad
-			);
-			topRingGeometry.rotateX(-Math.PI / 2); // Orient it flat on XZ plane
-			topRingGeometry.translate(0, vMax, 0); // Position it at the top
-			const topRingMesh = new THREE.Mesh(topRingGeometry, hsvShaderMaterial);
-			volumeMeshGroup.add(topRingMesh);
-		}
+                const addHueSegmentGeometry = (thetaStartRad, thetaLengthRad) => {
+                        if (thetaLengthRad <= epsilon) {
+                                return;
+                        }
 
-		if (volumeMeshGroup.children.length === 0) {
-			console.log('HSV subspace volume is zero or invalid, not rendering.');
-			hsvShaderMaterial.dispose(); // Dispose the material if no meshes were created
-			return;
-		}
+                        const openEndedOuter = sMin > epsilon && sMin < sMax;
+                        const outerCylinderGeometry = new THREE.CylinderGeometry(
+                                sMax,
+                                sMax,
+                                height,
+                                cylinderRadialSegments,
+                                cylinderHeightSegments,
+                                openEndedOuter,
+                                thetaStartRad,
+                                thetaLengthRad
+                        );
+                        outerCylinderGeometry.translate(0, vMin + height / 2, 0);
+                        volumeMeshGroup.add(new THREE.Mesh(outerCylinderGeometry, hsvShaderMaterial));
 
-		this.currentVisuals.add(volumeMeshGroup);
-		console.log('HSV SubSpace Volume updated and added to scene.');
+                        if (sMin > epsilon && sMin < sMax) {
+                                const innerCylinderGeometry = new THREE.CylinderGeometry(
+                                        sMin,
+                                        sMin,
+                                        height,
+                                        cylinderRadialSegments,
+                                        cylinderHeightSegments,
+                                        true,
+                                        thetaStartRad,
+                                        thetaLengthRad
+                                );
+                                innerCylinderGeometry.translate(0, vMin + height / 2, 0);
+                                volumeMeshGroup.add(new THREE.Mesh(innerCylinderGeometry, hsvShaderMaterial));
+
+                                const bottomRingGeometry = new THREE.RingGeometry(
+                                        sMin,
+                                        sMax,
+                                        ringThetaSegments,
+                                        ringPhiSegments,
+                                        thetaStartRad,
+                                        thetaLengthRad
+                                );
+                                bottomRingGeometry.rotateX(-Math.PI / 2);
+                                bottomRingGeometry.translate(0, vMin, 0);
+                                volumeMeshGroup.add(new THREE.Mesh(bottomRingGeometry, hsvShaderMaterial));
+
+                                const topRingGeometry = new THREE.RingGeometry(
+                                        sMin,
+                                        sMax,
+                                        ringThetaSegments,
+                                        ringPhiSegments,
+                                        thetaStartRad,
+                                        thetaLengthRad
+                                );
+                                topRingGeometry.rotateX(-Math.PI / 2);
+                                topRingGeometry.translate(0, vMax, 0);
+                                volumeMeshGroup.add(new THREE.Mesh(topRingGeometry, hsvShaderMaterial));
+                        }
+                };
+
+                hueSegments.forEach(({ start, length }) => addHueSegmentGeometry(start, length));
+
+                if (volumeMeshGroup.children.length === 0) {
+                        console.log('HSV subspace volume is zero or invalid, not rendering.');
+                        hsvShaderMaterial.dispose();
+                        return;
+                }
+
+                this.currentVisuals.add(volumeMeshGroup);
+                console.log('HSV SubSpace Volume updated and added to scene.');
 	}
 }
