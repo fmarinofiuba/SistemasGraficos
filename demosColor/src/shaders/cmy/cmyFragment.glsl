@@ -1,15 +1,12 @@
 varying vec3 vLocalPosition;
-uniform float u_cMin, u_cMax, u_mMin, u_mMax, u_yMin, u_yMax;
 
 void main() {
-    float c = (vLocalPosition.x - u_cMin) / (u_cMax - u_cMin);
-    float m = (vLocalPosition.y - u_mMin) / (u_mMax - u_mMin);
-    float y = (vLocalPosition.z - u_yMin) / (u_yMax - u_yMin);
-    
-    // Convert CMY to RGB
-    float r = 1.0 - c;
-    float g = 1.0 - m;
-    float b = 1.0 - y;
+    // Cube is centered on XZ: X and Z range from -0.5 to 0.5, Y from 0 to 1.
+    // Add 0.5 to X and Z to recover the [0,1] CMY values.
+    float c = vLocalPosition.x + 0.5;
+    float m = vLocalPosition.y;
+    float y = vLocalPosition.z + 0.5;
 
-    gl_FragColor = vec4(clamp(r,0.0,1.0), clamp(g,0.0,1.0), clamp(b,0.0,1.0), 1.0);
+    // Convert CMY to RGB
+    gl_FragColor = vec4(1.0 - c, 1.0 - m, 1.0 - y, 1.0);
 }

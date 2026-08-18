@@ -1,60 +1,35 @@
 import * as THREE from 'three';
 import { ColorSpace } from './ColorSpace.js';
 import {
-	createTubesFromEdges,
-	createDirectionalArcs,
 	createDirectionalArc,
 	createAxis,
-	TUBE_RADIUS,
-	TUBE_RADIAL_SEGMENTS,
 } from './GeometryUtils.js';
-import hslVertexShader from './shaders/hsl/hslVertex.glsl';
-import hslFragmentShader from './shaders/hsl/hslFragment.glsl';
-import {
-	outlineEdgeThickness,
-	L_MID_POINT,
-	MAX_VISUAL_RADIUS_AT_MID,
-	arrowRadius,
-	arrowLength,
-	axisThickness,
-} from './constants.js';
-
-// Constants for HSL geometry
-const RADIAL_SEGMENTS = 64;
-const HEIGHT_SEGMENTS = 16;
+import { buildHSLVolume } from './HSLVolumeBuilder.js';
+import { createHSLVolumeMaterial } from './HSLVolumeMaterial.js';
+import { outlineEdgeThickness } from './constants.js';
 
 export class HSLColorSpace extends ColorSpace {
 	constructor(scene) {
 		super(scene);
 		this.modelType = 'HSL';
 		this.subSpaceLimits = {
-			h: { min: 0, max: 1 }, // Default to full hue range
+			h: { min: 0, max: 1 },
 			s: { min: 0, max: 1 },
 			l: { min: 0, max: 1 },
 		};
-		console.log('HSLColorSpace initialized with default limits:', this.subSpaceLimits);
 	}
 
+	// ── Axes & labels (kept from original) ─────────────────────
+
 	_buildAxesAndLabels() {
-		console.log('HSL Axes and Labels building');
-		// HSL: Cylindrical (double-cone) model
-		// L: height (0 to 1), S: radius, H: angle
-		// Origin is at (0,0,0), L extends from 0 to 1
-		// Clear any existing visuals
-		this.clearCurrentVisuals();
-
-		//axes helpers
-		this.scene.add(new THREE.AxesHelper(1));
-
-		// Common material for axes and arrowheads
-		const axisMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-
-		// Extension factor for axes (make them 20% longer for better visibility)
 		const axisExtensionFactor = 1.2;
 
-		// L-axis (Lightness) - vertical, extends from 0 to axisExtensionFactor
+		const axesGroup = new THREE.Group();
+		axesGroup.name = 'axesGroup';
+
+		// L-axis (vertical)
 		createAxis(
-			this.currentVisuals,
+			axesGroup,
 			new THREE.Vector3(0, 0, 0),
 			new THREE.Vector3(0, axisExtensionFactor, 0),
 			'L',
@@ -63,28 +38,10 @@ export class HSLColorSpace extends ColorSpace {
 			this.makeTextSprite.bind(this)
 		);
 
-		// Add a TorusGeometry for the H ring at L=0.5
-		const torusRadius = 0.5; // Outer radius (distance from center to middle of tube)
-		const tubeRadius = outlineEdgeThickness; // Using centralized constant for tube thickness
-		const torusGeometry = new THREE.TorusGeometry(
-			torusRadius,
-			tubeRadius,
-			16, // tubular segments
-			64, // radial segments
-			Math.PI * 2 // arc
-		);
-		const torusMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
-		const torus = new THREE.Mesh(torusGeometry, torusMaterial);
-		torus.position.set(0, 0.5, 0);
-		torus.rotation.x = Math.PI / 2; // Rotate to be horizontal in XZ plane
-		this.currentVisuals.add(torus);
-
-		// S-axis (Saturation) - from L-axis outwards at L=0.5, extended by 20%
-		const s_axisLength = 0.5 * axisExtensionFactor; // Extended by 20%
-
-		// Create S-axis using the shared utility function
+		// S-axis (radial at L = 0.5)
+		const s_axisLength = 0.5 * axisExtensionFactor;
 		createAxis(
-			this.currentVisuals,
+			axesGroup,
 			new THREE.Vector3(0, 0.5, 0),
 			new THREE.Vector3(0, 0.5, s_axisLength),
 			'S',
@@ -93,67 +50,30 @@ export class HSLColorSpace extends ColorSpace {
 			this.makeTextSprite.bind(this)
 		);
 
-		// H-arcs (Hue) - around L-axis at L=0.5, moved outward
-		const h_arcRadius = s_axisLength + 0.1; // Slightly larger than S-axis extent
+		// H arcs
+		const h_arcRadius = s_axisLength + 0.1;
 		const h_arcY = 0.5;
-
-		// Create material for the arcs and arrowheads
 		const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff });
 
-		// Create a single directional arc
-		const startAngleDeg = 0;
-		const endAngleDeg = 45;
+		const firstArc = createDirectionalArc(null, 0, 45, h_arcRadius, h_arcY, arrowMaterial);
+		axesGroup.add(firstArc);
 
-		// Create the first directional arc (don't pass parent to control adding ourselves)
-		const firstArc = createDirectionalArc(
-			null, // Don't add to parent yet
-			startAngleDeg,
-			endAngleDeg,
-			h_arcRadius,
-			h_arcY,
-			arrowMaterial
-		);
-
-		// Add the first arc to the scene
-		this.currentVisuals.add(firstArc);
-
-		// Clone the first arc to create the second
 		const secondArc = firstArc.clone();
-
-		// Rotate the second arc 180 degrees around Y axis
 		secondArc.rotateY(Math.PI);
+		axesGroup.add(secondArc);
 
-		// Add the second arc to the scene
-		this.currentVisuals.add(secondArc);
-		// H label moved further out
-		this.currentVisuals.add(this.makeTextSprite('H', { x: h_arcRadius + 0.15, y: h_arcY, z: 0 }));
+		// H labels (one at each arrow tip)
+		axesGroup.add(this.makeTextSprite('H', { x: h_arcRadius + 0.15, y: h_arcY, z: 0 }));
+		axesGroup.add(this.makeTextSprite('H', { x: -(h_arcRadius + 0.15), y: h_arcY, z: 0 }));
+
+		this.currentVisuals.add(axesGroup);
 	}
 
-	_buildFullSpaceOutlineObject() {}
-
-	// Helper method to dispose of visuals and their resources
-	_disposeVisuals(object3D) {
-		if (object3D) {
-			object3D.traverse((child) => {
-				if (child.isMesh) {
-					if (child.geometry) {
-						child.geometry.dispose();
-					}
-					if (child.material) {
-						if (Array.isArray(child.material)) {
-							child.material.forEach((material) => material.dispose());
-						} else {
-							child.material.dispose();
-						}
-					}
-				}
-			});
-			if (object3D.parent) {
-				object3D.parent.remove(object3D);
-			}
-		}
+	_buildFullSpaceOutlineObject() {
+		// No outline object needed for now
 	}
 
+<<<<<<< HEAD
         // Helper to calculate radius at a given L value and saturation scaling
         _getRadiusAtL(l_value, s_value_for_radius_scaling = 1) {
                 let radius_at_s1;
@@ -408,4 +328,32 @@ export class HSLColorSpace extends ColorSpace {
                 this.currentVisuals.add(volumeMeshGroup);
                 console.log('HSL SubSpace Volume updated. Group contains:', volumeMeshGroup.children.length, 'meshes.');
         }
+=======
+	// ── Volume construction (NEW) ──────────────────────────────
+
+	_updateSubSpaceVolume(limits) {
+		// Convert normalized hue [0,1] → degrees [0,360]
+		const hMinDeg = limits.h.min * 360;
+		const hMaxDeg = limits.h.max * 360;
+		const sMin = limits.s.min;
+		const sMax = limits.s.max;
+		const lMin = limits.l.min;
+		const lMax = limits.l.max;
+
+		// Create shared material
+		const material = createHSLVolumeMaterial();
+
+		// Build volume boundary faces
+		const volumeGroup = buildHSLVolume(
+			hMinDeg, hMaxDeg,
+			sMin, sMax,
+			lMin, lMax,
+			material
+		);
+
+		this.currentVisuals.add(volumeGroup);
+	}
+
+>>>>>>> 386a6e9 (Guarda cambios locales y templateBasico)
 }
+
