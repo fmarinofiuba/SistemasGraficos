@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 import { createCylinder, createClosedCylinder } from './cylinder.js';
 
@@ -11,6 +12,7 @@ function setupThreeJs() {
 	container = document.getElementById('container3D');
 
 	renderer = new THREE.WebGLRenderer();
+	renderer.setClearColor(0x111111);
 	scene = new THREE.Scene();
 
 	container.appendChild(renderer.domElement);
@@ -34,8 +36,16 @@ function setupThreeJs() {
 	let pointLightHelper = new THREE.PointLightHelper(pointLight, 0.2);
 	scene.add(pointLightHelper);
 
+	const transformControls = new TransformControls(camera, renderer.domElement);
+	transformControls.setMode('translate');
+	transformControls.attach(pointLight);
+	transformControls.addEventListener('dragging-changed', (event) => {
+		controls.enabled = !event.value;
+	});
+	scene.add(transformControls);
+
 	
-	const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.25);
+	const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
 	scene.add(hemisphereLight);
 
 	const gridHelper = new THREE.GridHelper(5, 5);
@@ -55,11 +65,11 @@ function onResize() {
 function buildScene() {
 
 	// Cilindro abierto
-	const geo = createCylinder(1, 3, 32, 10);
+	//const geo = createCylinder(1, 3, 32, 10);
 	// Cilindro cerrado
-	//const geo = createClosedCylinder(1, 3, 12, 3);
+	const geo = createClosedCylinder(1, 3, 12, 3);
 	const defaultMaterial = new THREE.MeshPhongMaterial({
-		color: 0xff9900,
+		color: 0xff9900,		
 		side: THREE.FrontSide,
 		wireframe: false,
 		shininess: 100,
@@ -71,17 +81,17 @@ function buildScene() {
 	const cylinder = new THREE.Mesh(geo, material);
 
 	let normalMeshHelper = new VertexNormalsHelper(cylinder, 0.2, 0x00ff00, 1);
-	//scene.add(normalMeshHelper);
-	//scene.add(cylinder);
+	scene.add(normalMeshHelper);
+	scene.add(cylinder);
 
 	// esfera
 	const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
-	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: false });
+	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: false,wireframe: false });
 	const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
 
 	let sphereNormalHelper = new VertexNormalsHelper(sphere, 0.2, 0x00ff00, 1);
-	scene.add(sphereNormalHelper);
-	scene.add(sphere);
+	//scene.add(sphereNormalHelper);
+	//scene.add(sphere);
 }
 
 function animate() {
