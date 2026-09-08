@@ -44,7 +44,6 @@ function setupThreeJs() {
 	});
 	scene.add(transformControls);
 
-	
 	const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
 	scene.add(hemisphereLight);
 
@@ -63,13 +62,12 @@ function onResize() {
 }
 
 function buildScene() {
-
 	// Cilindro abierto
 	//const geo = createCylinder(1, 3, 32, 10);
 	// Cilindro cerrado
 	const geo = createClosedCylinder(1, 3, 12, 3);
 	const defaultMaterial = new THREE.MeshPhongMaterial({
-		color: 0xff9900,		
+		color: 0xff9900,
 		side: THREE.FrontSide,
 		wireframe: false,
 		shininess: 100,
@@ -86,7 +84,7 @@ function buildScene() {
 
 	// esfera
 	const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
-	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: false,wireframe: false });
+	const sphereMaterial = new THREE.MeshPhongMaterial({ color: 0xff00ff, flatShading: false, wireframe: false });
 	const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
 
 	let sphereNormalHelper = new VertexNormalsHelper(sphere, 0.2, 0x00ff00, 1);
