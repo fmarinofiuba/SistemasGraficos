@@ -7,17 +7,18 @@ import { createStore } from '../../app/AppState.js';
 import { drawRuler, drawTag, drawLine, drawHandle, drawTexelGrid, fmt } from '../../shared/uvDraw.js';
 import { CanvasView } from './CanvasView.js';
 import { SamplerModel, CAMERA_PRESETS, VIEWPORT_RES, PLANE_SIZE, areaInTexels } from './model.js';
+import { createFrustumMesh, createMovieCamera, placeMovieCamera, createLabelSprite, disposeLabelSprite, fitLabelToScreen } from '../../shared/cameraRig.js';
 import { TEX_N, SAMPLING_TEXTURES, textureByValue, texelAt, sampleNearest, sampleLinear, css, hex } from './textures.js';
 
 const NEIGHBOR_COLORS = { A: '#ff6b6b', B: '#3ddc84', C: '#4d8dff', D: '#ffa94d' };
 const NO_SURFACE = '#0c0e12';
 const YELLOW = '#ffd84d';
-const GEO_KEYS = ['res', 'cam', 'tilt', 'texture', 'sel', 'filter'];
+const GEO_KEYS = ['res', 'tilt', 'tilt2', 'texture', 'sel', 'filter'];
 
 const DEFAULTS = {
 	res: '16x12',
-	cam: 'angle',
 	tilt: 50,
+	tilt2: 0,
 	texture: 'numbered',
 	filter: 'nearest',
 	sel: [0.53, 0.47],
@@ -127,7 +128,7 @@ class SamplingLab extends Lab {
 		const half = PLANE_SIZE / 2;
 		const geo = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE);
 		this.planeMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: this.gpuTex.numbered, side: THREE.DoubleSide }));
-		this.wireMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.6 }));
+		this.wireMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.6 }));
 		this.wireMesh.position.z = 0.004;
 		const grid = [];
 		for (let k = 0; k <= TEX_N; k++) {
@@ -167,10 +168,20 @@ class SamplingLab extends Lab {
 		this.eyeLines.frustumCulled = false;
 		scene.add(this.eyeLines);
 
-		this.camHelper = new THREE.CameraHelper(this.model.camera);
-		this.camHelper.setColors(0x56c8ff, 0x56c8ff, 0x56c8ff, 0x56c8ff, 0x56c8ff);
-		this.camBody = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.22, 0.3), new THREE.MeshBasicMaterial({ color: 0x56c8ff }));
-		scene.add(this.camHelper, this.camBody);
+		scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+		const dl = new THREE.DirectionalLight(0xffffff, 1.4);
+		dl.position.set(6, 10, 6);
+		scene.add(dl);
+
+		this.frustum = createFrustumMesh(0.017, 0xffffff);
+		this.camBody = createMovieCamera();
+		scene.add(this.frustum.group, this.camBody);
+
+		this.camLabel = createLabelSprite('Cámara', '#56c8ff');
+		this.fpLabel = createLabelSprite('Footprint', YELLOW);
+		scene.add(this.camLabel, this.fpLabel);
+
+		this.model.moveToPreset('angle');
 
 		onClick(this, view.dom, (e) => {
 			const hit = view.raycast(e, [this.planeMesh])[0];
@@ -210,11 +221,17 @@ class SamplingLab extends Lab {
 		this.invalidate();
 	}
 
+	// Llevá la cámara simulada a una posición preestablecida: una acción puntual, no un valor ligado al store.
+	moveCameraToPreset(value) {
+		this.model.moveToPreset(value);
+		this.applyState();
+	}
+
 	recompute(patch) {
 		const s = this.store.state;
 		const { cols, rows } = this.res;
 		this.tex = textureByValue(s.texture);
-		this.model.setup({ cam: s.cam, tilt: s.tilt, cols, rows });
+		this.model.setup({ tilt: s.tilt, tilt2: s.tilt2, cols, rows });
 		const sampler = s.filter === 'linear' ? sampleLinear : sampleNearest;
 		this.centers = [];
 		this.pix = [];
@@ -237,7 +254,7 @@ class SamplingLab extends Lab {
 		this.update3D();
 		this.updateIdeal?.();
 		this.updateReadout?.();
-		if (this.uvView && this.focusOnSelect && (!patch || ['sel', 'res', 'cam', 'tilt'].some((k) => k in patch))) this.focusUV();
+		if (this.uvView && this.focusOnSelect && (!patch || ['sel', 'res', 'tilt', 'tilt2'].some((k) => k in patch))) this.focusUV();
 	}
 
 	focusUV() {
@@ -272,10 +289,10 @@ class SamplingLab extends Lab {
 		this.texelGrid.visible = s.texels;
 
 		m.camera.updateMatrixWorld(true);
-		this.camHelper.update();
-		this.camBody.position.copy(m.camera.position);
-		this.camBody.quaternion.copy(m.camera.quaternion);
-		this.camHelper.visible = this.camBody.visible = s.camera;
+		this.frustum.update(m.camera);
+		placeMovieCamera(this.camBody, m.camera);
+		this.camLabel.position.copy(m.camera.position);
+		this.frustum.group.visible = this.camBody.visible = this.camLabel.visible = s.camera;
 
 		const show = s.footprint && fp.valid;
 		this.fpFill.visible = this.fpLine.visible = this.eyeLines.visible = show;
@@ -296,10 +313,9 @@ class SamplingLab extends Lab {
 		if (fp.center) {
 			this.fpDot.position.set((fp.center[0] - 0.5) * PLANE_SIZE, (fp.center[1] - 0.5) * PLANE_SIZE, 0.02);
 			this.centerWorld = this.fpDot.position.clone().applyMatrix4(m.planeMatrix);
+			this.fpLabel.position.copy(this.centerWorld);
 		}
-		const L = this.view3d.labels;
-		L.set('cam', { html: 'Cámara', color: '#56c8ff', position: m.camera.position, visible: s.camera });
-		L.set('px', { html: 'Footprint', color: YELLOW, position: this.centerWorld || m.camera.position, visible: show && !!this.centerWorld, offset: [10, 6] });
+		this.fpLabel.visible = show && !!this.centerWorld;
 	}
 
 	// ---------- dibujo: viewport ----------
@@ -506,12 +522,26 @@ class SamplingLab extends Lab {
 		drawTag(ctx, [`centro del píxel`, `UV (${fmt(smp.u, 3)}, ${fmt(smp.v, 3)})`], px + 13, py + 10, { color: YELLOW });
 	}
 
+	// Tamaño fijo en píxeles para las etiquetas, sin importar el zoom del orbit control: hay que
+	// recalcularlo en cada frame porque la distancia cámara-objeto cambia con solo orbitar/hacer zoom.
+	syncLabels() {
+		fitLabelToScreen(this.camLabel, this.view3d.camera, this.view3d.h);
+		fitLabelToScreen(this.fpLabel, this.view3d.camera, this.view3d.h);
+	}
+
 	render() {
 		this.renderViews?.();
 	}
 
 	dispose() {
 		super.dispose();
+		// Sprite.geometry es un singleton compartido por todos los Sprites de la app: se saca de
+		// la escena antes del dispose() genérico para no liberar ese geometry compartido.
+		if (this.view3d) {
+			this.view3d.scene.remove(this.camLabel, this.fpLabel);
+			disposeLabelSprite(this.camLabel);
+			disposeLabelSprite(this.fpLabel);
+		}
 		this.view3d?.dispose();
 		this.uvView?.dispose();
 		this.vpView?.dispose();
@@ -520,7 +550,6 @@ class SamplingLab extends Lab {
 	}
 }
 
-const camOptions = CAMERA_PRESETS.map(({ value, label }) => ({ value, label }));
 const resOptions = VIEWPORT_RES.map(({ value, label }) => ({ value, label }));
 const texOptions = SAMPLING_TEXTURES.map(({ value, label }) => ({ value, label }));
 
@@ -546,12 +575,15 @@ export class PixelFootprintLab extends SamplingLab {
 		const vp = document.createElement('div');
 		vp.className = 'view';
 		vp.style.flex = '1.15';
+		const vpCaption = document.createElement('div');
+		vpCaption.className = 'view-caption';
+		vpCaption.textContent = 'Clic: elegir píxel';
 		const ideal = document.createElement('div');
 		ideal.className = 'view';
-		left.append(vp, ideal);
+		left.append(vp, vpCaption, ideal);
 
-		this.initViewport(vp, 'Clic: elegir píxel');
-		this.idealView = new CanvasView(ideal, { onInvalidate: this.invalidate, tag: 'Imagen ideal dentro del píxel' });
+		this.initViewport(vp);
+		this.idealView = new CanvasView(ideal, { onInvalidate: this.invalidate });
 		this.idealView.drawFn = (ctx, v) => this.drawIdeal(ctx, v);
 		this.ideal = document.createElement('canvas');
 		this.ideal.width = this.ideal.height = 64;
@@ -569,9 +601,11 @@ export class PixelFootprintLab extends SamplingLab {
 		p.idea('Un píxel de pantalla no equivale siempre a un texel. Cada píxel corresponde a una región sobre la superficie (su footprint) y a una región en el espacio UV, que puede cubrir uno o varios texels.');
 		p.title('Escena');
 		p.select('res', 'Resolución del viewport', resOptions);
-		p.select('cam', 'Posición de cámara', camOptions);
-		p.slider('tilt', 'Inclinación del plano (°)', { min: 0, max: 80, step: 1, digits: 0 });
+		p.slider('tilt', 'Inclinación del plano (°)', { min: 0, max: 160, step: 1, digits: 0 });
+		p.slider('tilt2', 'Inclinación lateral del plano (°)', { min: 0, max: 160, step: 1, digits: 0 });
 		p.select('texture', 'Textura diagnóstica', texOptions);
+		p.title('Posición de cámara');
+		p.buttons(...CAMERA_PRESETS.map((preset) => ({ label: preset.label, onClick: () => this.moveCameraToPreset(preset.value) })));
 		p.title('Visualización');
 		p.checkbox('footprint', 'Mostrar footprint');
 		p.checkbox('camera', 'Mostrar cámara');
@@ -582,6 +616,7 @@ export class PixelFootprintLab extends SamplingLab {
 	}
 
 	resetAll() {
+		this.model.moveToPreset('angle');
 		this.store.set({ ...this.defaults });
 		this.view3d.resetCamera();
 		this.uvView.resetView();
@@ -611,7 +646,7 @@ export class PixelFootprintLab extends SamplingLab {
 			for (let x = 0; x < N; x++) {
 				const uv = this.model.uvAt(pi + (x + 0.5) / N, pj + (y + 0.5) / N);
 				const ok = uv && uv[0] >= 0 && uv[0] <= 1 && uv[1] >= 0 && uv[1] <= 1;
-				const c = ok ? sampleLinear(this.tex, uv[0], uv[1]).color : [12, 14, 18];
+				const c = ok ? sampleNearest(this.tex, uv[0], uv[1]).color : [12, 14, 18];
 				const o = (y * N + x) * 4;
 				img.data[o] = c[0];
 				img.data[o + 1] = c[1];
@@ -625,11 +660,12 @@ export class PixelFootprintLab extends SamplingLab {
 		const sq = Math.max(10, Math.min(v.w - 16, v.h - 16));
 		const x0 = (v.w - sq) / 2;
 		const y0 = (v.h - sq) / 2;
-		ctx.imageSmoothingEnabled = true;
+		ctx.imageSmoothingEnabled = false;
 		ctx.drawImage(this.ideal, x0, y0, sq, sq);
 		ctx.strokeStyle = YELLOW;
 		ctx.lineWidth = 2;
 		ctx.strokeRect(x0, y0, sq, sq);
+		drawTag(ctx, 'Lo que se ve dentro del píxel', x0 + 6, y0 + 6, { color: '#fff' });
 		const cx = x0 + sq / 2;
 		const cy = y0 + sq / 2;
 		drawLine(ctx, [cx - 7, cy], [cx + 7, cy], '#fff', 1.5);
@@ -649,6 +685,7 @@ export class PixelFootprintLab extends SamplingLab {
 	renderViews() {
 		this.vpView.render();
 		this.idealView.render();
+		this.syncLabels();
 		this.view3d.render();
 		this.uvView.render();
 	}
@@ -672,7 +709,7 @@ export class SamplerFilterLab extends SamplingLab {
 	];
 
 	constructor(layout) {
-		super({ filter: 'linear', texture: 'texels', tilt: 50 });
+		super({ filter: 'nearest', texture: 'texels', tilt: 50 });
 		this.mode = 'filter';
 		const stack = layout.views[0];
 		const nav = document.createElement('div');
@@ -753,6 +790,7 @@ export class SamplerFilterLab extends SamplingLab {
 	}
 
 	resetAll() {
+		this.model.moveToPreset('angle');
 		this.store.set({ ...this.defaults });
 		this.view3d.resetCamera();
 		this.focusUV();
@@ -805,6 +843,8 @@ export class SamplerFilterLab extends SamplingLab {
 		const near = nearestKey(lin);
 		const P = [x0 + (0.5 + lin.fx) * q, y0 + (1.5 - lin.fy) * q];
 		const s = this.store.state;
+		const centerOf = (c) => [x0 + pos[c.key][0] * q + q / 2, y0 + pos[c.key][1] * q + q / 2];
+		// Primero los cuatro texels, para que las líneas punteadas y el punto queden siempre por encima.
 		for (const c of lin.cells) {
 			const [cx, cy] = [x0 + pos[c.key][0] * q, y0 + pos[c.key][1] * q];
 			ctx.save();
@@ -815,18 +855,22 @@ export class SamplerFilterLab extends SamplingLab {
 			ctx.strokeStyle = NEIGHBOR_COLORS[c.key];
 			ctx.lineWidth = mode === 'nearest' && c.key === near ? 4 : 2;
 			ctx.strokeRect(cx + 1, cy + 1, q - 2, q - 2);
-			const center = [cx + q / 2, cy + q / 2];
-			if (mode === 'linear') drawLine(ctx, P, center, NEIGHBOR_COLORS[c.key], 1 + 5 * c.w, [4, 3]);
-			else if (c.key === near) drawLine(ctx, P, center, '#fff', 1.5, [4, 3]);
 			this.tagOuter(ctx, mode === 'linear' && s.calc ? `${c.key} ${pct(c.w)}` : c.key, c.key, cx + q / 2, cy + q / 2, q, NEIGHBOR_COLORS[c.key]);
 		}
-		drawHandle(ctx, P[0], P[1], YELLOW, '', { r: 6, ring: false });
+		for (const c of lin.cells) {
+			if (mode === 'linear') drawLine(ctx, P, centerOf(c), '#fff', 1 + 5 * c.w, [4, 3]);
+			else if (c.key === near) drawLine(ctx, P, centerOf(c), '#fff', 1.5, [4, 3]);
+		}
+		drawHandle(ctx, P[0], P[1], '#fff', '', { r: 6, ring: true });
 	}
 
 	renderViews() {
 		const view = this.store.state.view;
 		if (view === 'viewport') this.vpView.render();
-		if (view === 'scene') this.view3d.render();
+		if (view === 'scene') {
+			this.syncLabels();
+			this.view3d.render();
+		}
 		if (view === 'uv') this.uvView.render();
 		this.schemas.forEach((v) => v.render());
 	}

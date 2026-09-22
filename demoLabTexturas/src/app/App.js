@@ -60,7 +60,7 @@ export class App {
 		const home = document.createElement('div');
 		home.className = 'home';
 		home.innerHTML = `<h1>Laboratorio interactivo de texturas</h1>
-			<p class="lead">Elegí una sección para explorar.</p><div class="cards"></div>`;
+			<div class="cards"></div>`;
 		const cards = home.querySelector('.cards');
 		for (const s of SECTIONS) {
 			const b = document.createElement('button');
@@ -85,9 +85,10 @@ export class App {
 			return b;
 		};
 		if (!section) {
-			bar.innerHTML = '<span class="tb-title">Laboratorio de texturas</span>';
+			bar.style.display = 'none';
 			return;
 		}
+		bar.style.display = '';
 		bar.appendChild(mk('Inicio', '', () => this.go(null)));
 		const title = document.createElement('span');
 		title.className = 'tb-title';

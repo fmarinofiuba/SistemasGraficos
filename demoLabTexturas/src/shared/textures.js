@@ -96,7 +96,7 @@ function drawChecker(ctx, N) {
 		}
 }
 
-function drawImageKind(ctx, N) {
+export function drawImageKind(ctx, N) {
 	ctx.save();
 	ctx.scale(N / 256, N / 256);
 	const sky = ctx.createLinearGradient(0, 0, 0, 170);

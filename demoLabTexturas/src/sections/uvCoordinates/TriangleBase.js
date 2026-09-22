@@ -67,7 +67,7 @@ export class TriangleBase extends Lab {
 	// ---------- escena 3D ----------
 	buildTriangle3D() {
 		const sc = this.view3d.scene;
-		sc.add(new THREE.GridHelper(10, 20, 0x2f3542, 0x22262f));
+		if (this.cfg.grid !== false) sc.add(new THREE.GridHelper(10, 20, 0x2f3542, 0x22262f));
 		this.geo = new THREE.BufferGeometry();
 		this.geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
 		this.geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(6), 2));
@@ -188,22 +188,28 @@ export class TriangleBase extends Lab {
 		h.cursorAt = (uv, p) => (this.nearestHandle(p) >= 0 ? 'grab' : '');
 	}
 
+	// Resolución de textura en uso (N×N). Por defecto la fija cfg.texSize; una subclase puede
+	// sobreescribir este método para permitir elegirla (ver UVInterpolationLab).
+	texSize() {
+		return this.cfg.texSize;
+	}
+
 	texData() {
-		return getTextureData(this.store.state.texture, this.cfg.texSize);
+		return getTextureData(this.store.state.texture, this.texSize());
 	}
 
 	drawUVBase(ctx, v) {
 		const s = this.store.state;
 		const tex = this.texData();
 		const smooth = s.filter === 'linear' ? true : false;
-		drawTextureWrapped(ctx, v, tex, s.wrap, { dimOutside: true, smooth: this.cfg.texSize > 64 ? undefined : smooth });
+		drawTextureWrapped(ctx, v, tex, s.wrap, { dimOutside: true, smooth: this.texSize() > 64 ? undefined : smooth });
 		// solo la región cubierta por el triángulo se ve "encendida"
 		ctx.save();
 		ctx.fillStyle = 'rgba(8,10,14,0.5)';
 		ctx.fillRect(0, 0, v.w, v.h);
 		pathTriangle(ctx, v, this.uv);
 		ctx.clip();
-		drawTextureWrapped(ctx, v, tex, s.wrap, { dimOutside: false, smooth: this.cfg.texSize > 64 ? undefined : smooth });
+		drawTextureWrapped(ctx, v, tex, s.wrap, { dimOutside: false, smooth: this.texSize() > 64 ? undefined : smooth });
 		ctx.restore();
 		drawUnitSquare(ctx, v, 'rgba(255,255,255,0.55)');
 	}
@@ -253,9 +259,9 @@ export class TriangleBase extends Lab {
 
 	applyState(patch = {}) {
 		const s = this.store.state;
-		if (patch.texture) {
+		if (patch.texture || patch.resolution) {
 			this.tex3?.dispose();
-			this.tex3 = getTextureData(s.texture, this.cfg.texSize).toThree(s.wrap, s.filter);
+			this.tex3 = getTextureData(s.texture, this.texSize()).toThree(s.wrap, s.filter);
 			this.mat.map = this.tex3;
 			this.mat.needsUpdate = true;
 		} else if ('wrap' in patch || 'filter' in patch) {

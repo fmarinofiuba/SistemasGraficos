@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { drawImageKind } from '../../shared/textures.js';
+
 // Tres texturas de prueba pensadas para distinguir clamp, repeat y mirrored repeat.
 const SIZE = 512;
 const FONT = 'system-ui, "Segoe UI", sans-serif';
@@ -109,11 +112,34 @@ function arrows() {
 	return canvas;
 }
 
+// D: paisaje (mismo mapa que en Dimensiones y tipos de textura). No es seamless: se ve bien el borde.
+function paisaje() {
+	const [canvas, ctx] = make();
+	drawImageKind(ctx, SIZE);
+	return canvas;
+}
+
 export const WRAP_TEXTURES = [
 	{ value: 'numbered', label: 'Patrón numerado', make: numbered },
 	{ value: 'motif', label: 'Motivo central', make: motif },
 	{ value: 'arrows', label: 'Flechas direccionales', make: arrows },
+	{ value: 'paisaje', label: 'Paisaje', make: paisaje },
 ];
+
+// Sprite sheet real (imagen del proyecto) para animar offset/repeat en el tiempo.
+export function loadSpriteSheet(url, onReady) {
+	const texture = new THREE.TextureLoader().load(url, () => {
+		texture.colorSpace = THREE.SRGBColorSpace;
+		// Sin mipmaps: evita que el filtrado mezcle texels del cuadro vecino en los bordes de cada celda.
+		texture.generateMipmaps = false;
+		texture.minFilter = THREE.LinearFilter;
+		texture.magFilter = THREE.LinearFilter;
+		texture.needsUpdate = true;
+		onReady?.();
+	});
+	texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+	return texture;
+}
 
 // Copias reducidas (512/256/128/64) para que la vista UV no produzca aliasing al muestrear.
 export function readLevel(canvas, size) {

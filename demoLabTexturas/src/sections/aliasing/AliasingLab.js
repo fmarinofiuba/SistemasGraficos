@@ -7,9 +7,12 @@ import { createStore } from '../../app/AppState.js';
 import { drawRuler, drawTag, drawHandle } from '../../shared/uvDraw.js';
 import { CanvasView } from '../sampling/CanvasView.js';
 import { FloorModel, FLOOR, FLOOR_TEXTURES, TILE, TEX_SIZE, MAX_LEVEL, buildMips, levelBytes, shade } from './floor.js';
+import { createFrustumMesh, createMovieCamera, placeMovieCamera, createLabelSprite, disposeLabelSprite, fitLabelToScreen } from '../../shared/cameraRig.js';
 
 const YELLOW = '#ffd84d';
 const RES = [
+	{ value: '24x18', label: '24 × 18', cols: 24, rows: 18 },
+	{ value: '48x36', label: '48 × 36', cols: 48, rows: 36 },
 	{ value: '96x72', label: '96 × 72', cols: 96, rows: 72 },
 	{ value: '160x120', label: '160 × 120', cols: 160, rows: 120 },
 	{ value: '240x180', label: '240 × 180', cols: 240, rows: 180 },
@@ -146,6 +149,7 @@ class AliasingLab extends Lab {
 
 	initScene(container) {
 		const view = (this.view3d = new Scene3DView(container, {
+			background: 0x8fcbef,
 			position: [8, 5, 10],
 			target: [0, 0, -10],
 			minDistance: 3,
@@ -189,10 +193,18 @@ class AliasingLab extends Lab {
 			o.frustumCulled = false;
 			scene.add(o);
 		}
-		this.camHelper = new THREE.CameraHelper(this.model.camera);
-		this.camHelper.setColors(0x56c8ff, 0x56c8ff, 0x56c8ff, 0x56c8ff, 0x56c8ff);
-		this.camBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.4), new THREE.MeshBasicMaterial({ color: 0x56c8ff }));
-		scene.add(this.camHelper, this.camBody);
+		scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+		const dl = new THREE.DirectionalLight(0xffffff, 1.4);
+		dl.position.set(6, 10, 6);
+		scene.add(dl);
+
+		this.frustum = createFrustumMesh(0.017, 0xffffff);
+		this.camBody = createMovieCamera();
+		scene.add(this.frustum.group, this.camBody);
+
+		this.camLabel = createLabelSprite('Cámara', '#56c8ff');
+		this.fpLabel = createLabelSprite('Footprint', YELLOW);
+		scene.add(this.camLabel, this.fpLabel);
 
 		onClick(this, view.dom, (e) => {
 			const hit = view.raycast(e, [this.floorMesh])[0];
@@ -382,6 +394,9 @@ class AliasingLab extends Lab {
 		return tex;
 	}
 
+	// La vista "Escena 3D" no es donde se enseña el aliasing (para eso están el viewport y el
+	// espacio UV, que sí respetan mip/aniso/filtro elegidos); acá el piso solo sirve de referencia
+	// para ubicar cámara, footprint y frustum, así que siempre usa el mejor filtrado disponible.
 	updateGPUTexture() {
 		const s = this.store.state;
 		const linear = s.filter === 'linear';
@@ -390,9 +405,9 @@ class AliasingLab extends Lab {
 			return;
 		}
 		const tex = this.textures[s.texture].gpu;
-		const min = s.mip ? (linear ? THREE.LinearMipmapLinearFilter : THREE.NearestMipmapNearestFilter) : linear ? THREE.LinearFilter : THREE.NearestFilter;
+		const min = linear ? THREE.LinearMipmapLinearFilter : THREE.NearestMipmapLinearFilter;
 		const mag = linear ? THREE.LinearFilter : THREE.NearestFilter;
-		const aniso = s.mip ? this.anisoValue : 1;
+		const aniso = this.maxAniso;
 		if (tex.minFilter !== min || tex.magFilter !== mag || tex.anisotropy !== aniso) {
 			tex.minFilter = min;
 			tex.magFilter = mag;
@@ -407,10 +422,10 @@ class AliasingLab extends Lab {
 		const m = this.model;
 		this.updateGPUTexture();
 		m.camera.updateMatrixWorld(true);
-		this.camHelper.update();
-		this.camBody.position.copy(m.camera.position);
-		this.camBody.quaternion.copy(m.camera.quaternion);
-		this.camHelper.visible = this.camBody.visible = s.camera;
+		this.frustum.update(m.camera);
+		placeMovieCamera(this.camBody, m.camera);
+		this.camLabel.position.copy(m.camera.position);
+		this.frustum.group.visible = this.camBody.visible = this.camLabel.visible = s.camera;
 		const fp = this.fp;
 		const show = s.footprint && !!fp?.valid;
 		this.fpFill.visible = this.fpLine.visible = this.fpDot.visible = this.eyeLines.visible = show;
@@ -427,10 +442,9 @@ class AliasingLab extends Lab {
 			ep.needsUpdate = true;
 			this.fpDot.position.set(fp.center.x, 0.06, fp.center.z);
 			this.centerWorld = this.fpDot.position;
+			this.fpLabel.position.set(fp.center.x, 0.06, fp.center.z);
 		}
-		const L = this.view3d.labels;
-		L.set('cam', { html: 'Cámara', color: '#56c8ff', position: m.camera.position, visible: s.camera });
-		L.set('px', { html: 'Footprint', color: YELLOW, position: this.centerWorld || m.camera.position, visible: show, offset: [10, 6] });
+		this.fpLabel.visible = show;
 	}
 
 	// ---------- dibujo: viewport ----------
@@ -620,12 +634,21 @@ class AliasingLab extends Lab {
 	render() {
 		const v = this.store.state.view;
 		if (v === 'viewport') this.vpView.render();
-		if (v === 'scene') this.view3d.render();
+		if (v === 'scene') {
+			fitLabelToScreen(this.camLabel, this.view3d.camera, this.view3d.h);
+			fitLabelToScreen(this.fpLabel, this.view3d.camera, this.view3d.h);
+			this.view3d.render();
+		}
 		if (v === 'uv') this.uvView.render();
 	}
 
 	dispose() {
 		super.dispose();
+		// Sprite.geometry es un singleton compartido por todos los Sprites de la app: se saca de
+		// la escena antes del dispose() genérico para no liberar ese geometry compartido.
+		this.view3d.scene.remove(this.camLabel, this.fpLabel);
+		disposeLabelSprite(this.camLabel);
+		disposeLabelSprite(this.fpLabel);
 		this.view3d.dispose();
 		this.uvView.dispose();
 		this.vpView.dispose();

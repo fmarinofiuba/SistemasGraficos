@@ -81,11 +81,16 @@ function generatedCylinder() {
 }
 
 function generatedBottle() {
+	// Perfil tipo botella de vidrio clásica ("contour bottle"), esbelta: base, ensanche inferior
+	// acanalado, cintura marcada, cuerpo (zona de etiqueta), hombro y cuello largo hasta la boca.
+	// 17 puntos (índices 0..16): la etiqueta va de v=6/16=0.375 a v=10/16=0.625 (25% de la altura),
+	// para que coincida con la franja central que dibuja createColaLabelTexture.
 	const profile = [
-		[0.55, -1.65], [0.78, -1.56], [0.86, -1.35], [0.9, -0.95], [0.88, 0.35],
-		[0.8, 0.72], [0.61, 0.98], [0.38, 1.12], [0.34, 1.42], [0.39, 1.53],
+		[0.0, -1.9], [0.42, -1.87], [0.47, -1.74], [0.5, -1.55], [0.4, -1.32],
+		[0.33, -1.08], [0.44, -0.86], [0.475, -0.55], [0.475, -0.15], [0.47, 0.2],
+		[0.45, 0.42], [0.4, 0.62], [0.28, 0.88], [0.16, 1.08], [0.145, 1.42], [0.17, 1.55], [0.115, 1.66],
 	].map(([r, y]) => new THREE.Vector2(r, y));
-	return geometryData(new THREE.LatheGeometry(profile, 40), {
+	return geometryData(new THREE.LatheGeometry(profile, 48), {
 		strategy: 'Parámetros de LatheGeometry: u → giro, v → índice del perfil.',
 	});
 }
@@ -96,6 +101,15 @@ function generatedSphere() {
 	});
 }
 
+// TubeGeometry devuelve por defecto u → a lo largo del recorrido, v → alrededor de la sección.
+// Se invierten para que coincida con la convención del resto del capítulo (como en el cilindro:
+// u → ángulo/sección, v → altura/recorrido).
+function swapUV(geometry) {
+	const uv = geometry.attributes.uv;
+	for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i), uv.getX(i));
+	uv.needsUpdate = true;
+}
+
 function generatedTube() {
 	const curve = new THREE.CatmullRomCurve3([
 		V(-2.25, -0.9, -0.65), V(-1.55, 0.55, 0.55), V(-0.65, -0.25, 0.9),
@@ -104,11 +118,24 @@ function generatedTube() {
 	const tubularSegments = 96;
 	const radius = 0.34;
 	const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, 14, false);
+	swapUV(geometry);
 	const path = curve.getPoints(tubularSegments);
-	const t = 0.55;
+	const data = geometryData(geometry, {
+		strategy: 'Parámetros de TubeGeometry (invertidos): u → alrededor de la sección, v → a lo largo del recorrido.',
+		guides: [{ points: path, color: 0x5b9cff, label: 'v · recorrido' }],
+	});
+	// Metadatos para recalcular el anillo de la sección transversal en cualquier punto del recorrido (slider).
+	data.tube = { curve, radius, tubularSegments };
+	return data;
+}
+
+// Anillo de la sección transversal del tubo en t ∈ [0,1] a lo largo del recorrido (para el slider).
+export function tubeSectionRing(tube, t) {
+	const { curve, radius, tubularSegments } = tube;
+	const clampedT = Math.min(1, Math.max(0, t));
 	const frames = curve.computeFrenetFrames(tubularSegments, false);
-	const frameIndex = Math.round(t * tubularSegments);
-	const center = curve.getPointAt(t);
+	const frameIndex = Math.min(tubularSegments, Math.round(clampedT * tubularSegments));
+	const center = curve.getPointAt(clampedT);
 	const ring = [];
 	for (let i = 0; i <= 32; i++) {
 		const a = (i / 32) * Math.PI * 2;
@@ -116,13 +143,7 @@ function generatedTube() {
 			.addScaledVector(frames.normals[frameIndex], Math.cos(a) * radius * 1.08)
 			.addScaledVector(frames.binormals[frameIndex], Math.sin(a) * radius * 1.08));
 	}
-	return geometryData(geometry, {
-		strategy: 'Parámetros de TubeGeometry: u → trayectoria, v → circunferencia.',
-		guides: [
-			{ points: path, color: 0x5b9cff, label: 'u · trayectoria' },
-			{ points: ring, color: 0xffd84d, label: 'v · sección' },
-		],
-	});
+	return ring;
 }
 
 const GENERATED = {

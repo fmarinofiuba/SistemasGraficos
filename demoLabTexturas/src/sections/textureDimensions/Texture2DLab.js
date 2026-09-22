@@ -5,7 +5,7 @@ import { TextureSpaceView } from '../../shared/TextureSpaceView.js';
 import { ControlPanel } from '../../layout/ControlPanel.js';
 import { createStore } from '../../app/AppState.js';
 import { TEXTURE_KINDS, getTextureData, rgbCss } from '../../shared/textures.js';
-import { makeTeapot, makeSphere } from '../../shared/geometries.js';
+import { makeTeapot, makeSphere, makeCube, makeCylinder, makePointMarker } from '../../shared/geometries.js';
 import { drawRuler, drawUnitSquare, drawGridLines, drawTexelGrid, fillTexel, drawTextureWrapped, drawTag, fmt } from '../../shared/uvDraw.js';
 
 const TEX_SIZE = 256;
@@ -14,10 +14,16 @@ const HIGHLIGHT_GLSL = `
 	uniform vec2 uCursor; uniform float uRadius; uniform float uActive;`;
 const HIGHLIGHT_MAIN = `
 	{
+		// Puntos espejo: mismo (u,v) repetido en otras zonas de la malla. Se pintan sobre la
+		// superficie como un punto blanco con borde negro, distinto del marcador 3D (esfera amarilla).
 		float d = length(vMapUv - uCursor);
-		float fill = uActive * (1.0 - smoothstep(uRadius * 0.7, uRadius, d));
-		float ring = uActive * smoothstep(uRadius * 0.7, uRadius, d) * (1.0 - smoothstep(uRadius, uRadius * 1.3, d));
-		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.9, 0.1), clamp(fill * 0.6 + ring * 0.95, 0.0, 1.0));
+		float rOuter = uRadius;
+		float rInner = uRadius * 0.72;
+		float aa = uRadius * 0.12;
+		float fill = uActive * (1.0 - smoothstep(rInner - aa, rInner + aa, d));
+		float ring = uActive * smoothstep(rInner - aa, rInner + aa, d) * (1.0 - smoothstep(rOuter - aa, rOuter + aa, d));
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.0), ring);
+		diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), fill);
 	}`;
 
 function patchHighlight(mat, uniforms) {
@@ -55,7 +61,7 @@ export class Texture2DLab extends Lab {
 			locked: false,
 			source: 'none',
 		});
-		this.geos = { teapot: makeTeapot(3, 14), sphere: makeSphere(1.5) };
+		this.geos = { teapot: makeTeapot(3, 14), sphere: makeSphere(1.5), cube: makeCube(), cylinder: makeCylinder() };
 		this.hl = {
 			uCursor: { value: new THREE.Vector2() },
 			uRadius: { value: 0.045 },
@@ -83,14 +89,11 @@ export class Texture2DLab extends Lab {
 		scene.add(this.mesh);
 		this.wireMesh = new THREE.Mesh(
 			this.geos.teapot,
-			new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.35 })
+			new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.35 })
 		);
 		scene.add(this.wireMesh);
-		this.marker = new THREE.Mesh(
-			new THREE.SphereGeometry(0.06, 16, 12),
-			new THREE.MeshBasicMaterial({ color: 0xffd84d, depthTest: false })
-		);
-		this.marker.renderOrder = 10;
+		// Mismo aspecto que el punto de la vista UV: círculo amarillo pequeño con borde negro.
+		this.marker = makePointMarker({ color: 0xffd84d, radius: 0.042, border: 0.012 });
 		this.marker.visible = false;
 		scene.add(this.marker);
 
@@ -150,6 +153,8 @@ export class Texture2DLab extends Lab {
 		p.select('geometry', 'Geometría', [
 			{ value: 'teapot', label: 'Tetera' },
 			{ value: 'sphere', label: 'Esfera' },
+			{ value: 'cube', label: 'Cubo' },
+			{ value: 'cylinder', label: 'Cilindro' },
 		]);
 		p.select('texture', 'Textura', TEXTURE_KINDS);
 		p.title('Visualización');

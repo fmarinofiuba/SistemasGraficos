@@ -16,11 +16,13 @@ function canvas256() {
 	return [c, c.getContext('2d')];
 }
 
+// Gris claro / gris oscuro (no blanco/negro puro): así el checker no compite visualmente con el
+// contorno rojo del frustum ni con el amarillo del footprint en la escena 3D.
 function checker() {
 	const [c, g] = canvas256();
-	g.fillStyle = '#f0f0f2';
+	g.fillStyle = '#9a9fa8';
 	g.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
-	g.fillStyle = '#1c2029';
+	g.fillStyle = '#44484f';
 	const s = 16;
 	for (let j = 0; j < TEX_SIZE / s; j++) for (let i = 0; i < TEX_SIZE / s; i++) if ((i + j) % 2) g.fillRect(i * s, j * s, s, s);
 	return c;

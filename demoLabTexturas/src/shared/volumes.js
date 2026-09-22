@@ -2,6 +2,7 @@ import * as THREE from 'three';
 
 export const VOLUME_KINDS = [
 	{ value: 'bands', label: 'Bandas (ejes RGB)' },
+	{ value: 'rock', label: 'Roca · estratos (ruido Perlin)' },
 	{ value: 'noise', label: 'Ruido' },
 	{ value: 'cells', label: 'Celdas' },
 	{ value: 'synthetic', label: 'Volumen sintético' },
@@ -44,6 +45,57 @@ function fbm(x, y, z) {
 	return r / 0.9375;
 }
 
+// Gradiente tipo "heatmap": de cálido (rojo/naranja) a frío (azul/violeta), con paradas
+// bien separadas en matiz para que las capas de la roca se distingan claramente entre sí.
+const HEATMAP_STOPS = [
+	[0.0, [120, 12, 24]],
+	[0.15, [214, 39, 40]],
+	[0.3, [241, 143, 24]],
+	[0.45, [247, 217, 40]],
+	[0.58, [90, 191, 92]],
+	[0.72, [40, 170, 190]],
+	[0.86, [45, 100, 210]],
+	[1.0, [70, 35, 140]],
+];
+
+function heatmapColor(t) {
+	t = Math.min(1, Math.max(0, t));
+	for (let i = 0; i < HEATMAP_STOPS.length - 1; i++) {
+		const [t0, c0] = HEATMAP_STOPS[i];
+		const [t1, c1] = HEATMAP_STOPS[i + 1];
+		if (t <= t1 || i === HEATMAP_STOPS.length - 2) {
+			const f = (t - t0) / (t1 - t0);
+			return [lerp(c0[0], c1[0], f), lerp(c0[1], c1[1], f), lerp(c0[2], c1[2], f)];
+		}
+	}
+	return HEATMAP_STOPS[HEATMAP_STOPS.length - 1][1];
+}
+
+// Interior de una roca irregular: estratos curvos y plegados (deformados con ruido, no bandas
+// rectas), cada uno con un color bien diferenciable tomado de un gradiente cálido→frío, más
+// grano fino para que la superficie de cada capa no quede plana.
+function rockColor(u, v, w) {
+	const wx = u + 0.42 * (fbm(u * 1.7 + 4.2, v * 1.7 + 1.1, w * 1.7 + 7.3) - 0.5);
+	const wy = v + 0.42 * (fbm(u * 1.7 - 3.4, v * 1.7 + 5.8, w * 1.7 - 2.2) - 0.5);
+	const wz = w + 0.42 * (fbm(u * 1.7 + 8.1, v * 1.7 - 6.6, w * 1.7 + 0.4) - 0.5);
+
+	// "Profundidad" diagonal a través de la roca, con un segundo pliegue de baja frecuencia
+	// para que los estratos se curven y no queden alineados a los ejes.
+	let depth = wx * 0.4 + wy * 0.85 + wz * 0.35;
+	depth += 0.4 * (fbm(u * 2.6 + 11, v * 2.6 + 3, w * 2.6 + 9) - 0.5);
+	depth -= Math.floor(depth); // envuelve a [0,1): varias capas a lo largo del volumen
+
+	const LAYERS = 7;
+	const grain = fbm(u * 11 + 1, v * 11 + 5, w * 11 + 2);
+	const layer = Math.floor(depth * LAYERS);
+	const t = Math.min(1, Math.max(0, layer / (LAYERS - 1) + (grain - 0.5) * 0.1));
+
+	const c = heatmapColor(t);
+	const speckle = fbm(u * 22 + 5, v * 22 + 9, w * 22 + 1);
+	const shade = 0.78 + 0.34 * speckle;
+	return [c[0] * shade, c[1] * shade, c[2] * shade];
+}
+
 function hsl(h, s, l) {
 	const k = (n) => (n + h * 12) % 12;
 	const a = s * Math.min(l, 1 - l);
@@ -57,6 +109,7 @@ export function volumeColor(kind, u, v, w) {
 		const b = (t) => (Math.floor(t * 6) % 2 ? 235 : 45);
 		return [b(u), b(v), b(w)];
 	}
+	if (kind === 'rock') return rockColor(u, v, w);
 	if (kind === 'noise') {
 		const n = fbm(u * 5, v * 5, w * 5);
 		const t = Math.min(1, Math.max(0, (n - 0.25) * 1.9));

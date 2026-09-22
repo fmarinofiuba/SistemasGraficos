@@ -17,6 +17,8 @@ import {
 	RotationCenterLab,
 	FreeComparisonLab,
 } from '../sections/wrapping/WrappingLab.js';
+import { SpriteSheetLab } from '../sections/wrapping/SpriteSheetLab.js';
+import { HouseAdjustLab } from '../sections/wrapping/HouseAdjustLab.js';
 import { AliasingTabLab, MipmapsTabLab } from '../sections/aliasing/AliasingLab.js';
 import { PixelFootprintLab, SamplerFilterLab } from '../sections/sampling/SamplingLab.js';
 
@@ -149,6 +151,8 @@ export const SECTIONS = [
 			{ id: 'offset-repeat', title: 'Offset y Repeat', Lab: OffsetRepeatLab },
 			{ id: 'rotacion', title: 'Rotación y centro', Lab: RotationCenterLab },
 			{ id: 'libre', title: 'Comparación libre', Lab: FreeComparisonLab },
+			{ id: 'sprite', title: 'Sprite sheet', Lab: SpriteSheetLab },
+			{ id: 'ajuste', title: 'Ajuste de texturas', Lab: HouseAdjustLab },
 		],
 	},
 	{

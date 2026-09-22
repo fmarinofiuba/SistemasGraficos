@@ -38,20 +38,33 @@ export class SamplerModel {
 		this._p = new THREE.Vector3();
 	}
 
-	setup({ cam, tilt, cols, rows }) {
-		const preset = CAMERA_PRESETS.find((c) => c.value === cam) || CAMERA_PRESETS[0];
+	// No toca la posición/orientación de la cámara: eso lo maneja moveToPreset(). setup() solo
+	// actualiza lo que depende de la resolución y la inclinación del plano.
+	// tilt inclina el plano sobre el eje X (como antes); tilt2 le suma un giro lateral sobre el eje Z,
+	// aplicado primero, así que el plano queda inclinado en dos ejes a la vez.
+	setup({ tilt, tilt2 = 0, cols, rows }) {
 		this.cols = cols;
 		this.rows = rows;
-		this.camera.position.set(...preset.pos);
 		this.camera.aspect = cols / rows;
+		this.camera.far = this.camera.position.length() * 1.5;
+		this.camera.updateProjectionMatrix();
+		this.camera.updateMatrixWorld(true);
+		const qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -THREE.MathUtils.degToRad(tilt));
+		const qz = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), THREE.MathUtils.degToRad(tilt2));
+		this.planeMatrix.makeRotationFromQuaternion(qx.multiply(qz));
+		this.inv.copy(this.planeMatrix).invert();
+		const normal = new THREE.Vector3(0, 0, 1).transformDirection(this.planeMatrix);
+		this.plane.setFromNormalAndCoplanarPoint(normal, new THREE.Vector3());
+	}
+
+	// Salta a una posición de cámara preestablecida (acción explícita, no un binding continuo).
+	moveToPreset(value) {
+		const preset = CAMERA_PRESETS.find((c) => c.value === value) || CAMERA_PRESETS[0];
+		this.camera.position.set(...preset.pos);
 		this.camera.far = this.camera.position.length() * 1.5;
 		this.camera.lookAt(0, 0, 0);
 		this.camera.updateProjectionMatrix();
 		this.camera.updateMatrixWorld(true);
-		this.planeMatrix.makeRotationX(-THREE.MathUtils.degToRad(tilt));
-		this.inv.copy(this.planeMatrix).invert();
-		const normal = new THREE.Vector3(0, 0, 1).transformDirection(this.planeMatrix);
-		this.plane.setFromNormalAndCoplanarPoint(normal, new THREE.Vector3());
 	}
 
 	// Punto del plano (coordenadas locales) visto en la posición (fx, fy) de píxel; null si no hay superficie.

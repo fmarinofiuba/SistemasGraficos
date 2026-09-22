@@ -13,15 +13,18 @@ import {
 	buildCylindricalProjection,
 	buildBoxProjection,
 	dataFromModelGeometry,
+	tubeSectionRing,
 } from './geometry.js';
 import {
 	ASSET_URLS,
 	canvasTexture,
 	createCheckerTexture,
-	createSweepBandsTexture,
+	createColaLabelTexture,
+	createTubeTexture,
 	createUvDiagnosticTexture,
 	loadColorTexture,
 } from './textures.js';
+import { getTextureData as getSharedTextureData } from '../../shared/textures.js';
 
 export const UV_STRATEGY_CASES = [
 	{ value: 'generacion', label: 'UV de generación' },
@@ -56,6 +59,12 @@ const CASES = {
 
 const AXIS_COLORS = ['#ef5a62', '#47d57c', '#528dff'];
 
+// Por encima de este número de triángulos se desactivan las operaciones por-triángulo (resaltado en
+// el panel UV, costuras, selección por clic): los demás casos de este capítulo rondan el millar de
+// triángulos; un modelo importado puede tener órdenes de magnitud más y esas operaciones son O(triángulos)
+// por cuadro, así que se muestran solo el modelo texturizado y el atlas plano, sin trabarse.
+const HEAVY_MESH_TRIANGLE_LIMIT = 40000;
+
 function patchSelection(material, uniforms) {
 	material.onBeforeCompile = (shader) => {
 		shader.uniforms.uHasSelection = uniforms.uHasSelection;
@@ -81,23 +90,51 @@ function lineFromPoints(points, color) {
 	);
 }
 
+// Primera textura con imagen encontrada entre los materiales del modelo: el atlas que viene
+// embebido dentro del propio GLB, sin depender de un archivo aparte.
+function extractGlbTexture(root) {
+	let found = null;
+	root.traverse((object) => {
+		if (found || !object.isMesh) return;
+		for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+			if (material?.map) {
+				found = material.map;
+				break;
+			}
+		}
+	});
+	return found;
+}
+
 function combineModelMeshes(root) {
 	root.updateMatrixWorld(true);
-	const positions = [];
-	const normals = [];
-	const uvs = [];
+	// Se recorre dos veces: una para saber el tamaño total (y reservar los typed arrays de una sola
+	// vez) y otra para copiarlos con .set(). Evita el spread sobre arrays de millones de elementos
+	// (revienta la pila) y evita también los arrays de JS intermedios de un modelo grande.
+	const meshGeometries = [];
+	let vertexCount = 0;
 	root.traverse((object) => {
 		if (!object.isMesh || !object.geometry?.getAttribute('uv')) return;
 		let geometry = object.geometry.clone();
 		geometry.applyMatrix4(object.matrixWorld);
 		if (geometry.index) geometry = geometry.toNonIndexed();
 		if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
-		positions.push(...geometry.getAttribute('position').array);
-		normals.push(...geometry.getAttribute('normal').array);
-		uvs.push(...geometry.getAttribute('uv').array);
-		geometry.dispose();
+		meshGeometries.push(geometry);
+		vertexCount += geometry.getAttribute('position').count;
 	});
-	if (!positions.length) throw new Error('El GLB no contiene una malla con atributo UV.');
+	if (!meshGeometries.length) throw new Error('El GLB no contiene una malla con atributo UV.');
+	const positions = new Float32Array(vertexCount * 3);
+	const normals = new Float32Array(vertexCount * 3);
+	const uvs = new Float32Array(vertexCount * 2);
+	let offset = 0;
+	for (const g of meshGeometries) {
+		const count = g.getAttribute('position').count;
+		positions.set(g.getAttribute('position').array, offset * 3);
+		normals.set(g.getAttribute('normal').array, offset * 3);
+		uvs.set(g.getAttribute('uv').array, offset * 2);
+		offset += count;
+		g.dispose();
+	}
 	const geometry = new THREE.BufferGeometry();
 	geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 	geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
@@ -119,7 +156,7 @@ class UVStrategiesLab extends Lab {
 		'Clic en un triángulo de cualquiera de las dos vistas para relacionar la superficie 3D con sus coordenadas UV.',
 		'Arrastrá en la escena para orbitar. En UV, usá la rueda para acercar y el botón derecho para desplazar.',
 		'El wireframe se superpone a la textura; las líneas naranjas marcan costuras UV.',
-		'El caso de unwrap se activará automáticamente cuando agregues el GLB y su atlas en la carpeta maps.',
+		'El caso de unwrap carga un modelo GLB con su textura embebida (sin archivos aparte) y la muestra tal cual está en el archivo.',
 	];
 
 	constructor(layout) {
@@ -131,11 +168,13 @@ class UVStrategiesLab extends Lab {
 			object: 'plane',
 			textureMode: 'real',
 			wire: false,
+			wireUV: true,
 			seams: true,
 			reference: true,
 			boxColors: false,
 			uvFilter: 'all',
 			selected: null,
+			sectionT: 0.55,
 		});
 		this.selectionUniforms = { uHasSelection: { value: 0 } };
 		this.disposed = false;
@@ -143,11 +182,19 @@ class UVStrategiesLab extends Lab {
 		this.textureCanvases = {
 			diagnostic: createUvDiagnosticTexture(),
 			checker: createCheckerTexture(),
-			sweep: createSweepBandsTexture(),
+			tube: createTubeTexture(),
+			cola: createColaLabelTexture(),
 		};
 		this.textures.diagnostic = canvasTexture(this.textureCanvases.diagnostic);
 		this.textures.checker = canvasTexture(this.textureCanvases.checker);
-		this.textures.sweep = canvasTexture(this.textureCanvases.sweep);
+		this.textures.tube = canvasTexture(this.textureCanvases.tube);
+		// El recorrido es mucho más largo que la sección: se repite ×3 a lo largo de v para que no se estire.
+		this.textures.tube.wrapT = THREE.RepeatWrapping;
+		this.textures.tube.repeat.set(1, 3);
+		this.textures.tube.needsUpdate = true;
+		this.textures.cola = canvasTexture(this.textureCanvases.cola);
+		// Misma textura "Imagen (paisaje)" del capítulo anterior (Dimensiones y tipos de textura / Coordenadas UV).
+		this.textures.landscape = getSharedTextureData('image', 512).toThree('clamp');
 
 		this.view3d = new Scene3DView(layout.left, {
 			position: this.config.camera,
@@ -213,7 +260,7 @@ class UVStrategiesLab extends Lab {
 			this.invalidate();
 		}, () => {
 			if (this.disposed) return;
-			if (key === 'earth') this.resourceError = 'Falta maps/earth-equirectangular.jpg; se muestra la textura diagnóstica.';
+			if (key === 'earth') this.resourceError = 'Falta maps/tierra.jpg; se muestra la textura diagnóstica.';
 			this.invalidate();
 		});
 	}
@@ -240,7 +287,7 @@ class UVStrategiesLab extends Lab {
 		geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 		this.mesh = new THREE.Mesh(geometry, this.materialTextured);
 		this.view3d.scene.add(this.mesh);
-		this.wire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0x050608, wireframe: true, transparent: true, opacity: 0.34, depthTest: true }));
+		this.wire = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.34, depthTest: true }));
 		this.view3d.scene.add(this.wire);
 		this.selectionLines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffd84d, depthTest: false }));
 		this.selectionLines.renderOrder = 8;
@@ -267,6 +314,7 @@ class UVStrategiesLab extends Lab {
 		this.mesh?.geometry.dispose();
 		this.wire?.material.dispose();
 		this.mesh = this.wire = this.selectionLines = this.seamLines = this.guides = this.reference = null;
+		this.sectionRingLine = null;
 	}
 
 	mountSeams() {
@@ -299,7 +347,25 @@ class UVStrategiesLab extends Lab {
 			this.view3d.labels.hide('uv-guide-0');
 			this.view3d.labels.hide('uv-guide-1');
 		}
+		if (this.data.tube) {
+			this.sectionRingLine = lineFromPoints(tubeSectionRing(this.data.tube, this.store.state.sectionT), 0xffd84d);
+			this.sectionRingLine.renderOrder = 9;
+			this.guides.add(this.sectionRingLine);
+			this.updateSectionRing();
+		} else {
+			this.sectionRingLine = null;
+			this.view3d.labels.hide('uv-guide-section');
+		}
 		this.view3d.scene.add(this.guides);
+	}
+
+	// Recalcula el anillo de la sección transversal del tubo en la posición elegida por el slider.
+	updateSectionRing() {
+		if (!this.sectionRingLine || !this.data?.tube) return;
+		const ring = tubeSectionRing(this.data.tube, this.store.state.sectionT);
+		this.sectionRingLine.geometry.setFromPoints(ring);
+		this.view3d.labels.set('uv-guide-section', { html: 'u · sección', position: ring[0], color: '#ffd84d' });
+		this.invalidate();
 	}
 
 	mountProjectionReference() {
@@ -327,7 +393,7 @@ class UVStrategiesLab extends Lab {
 
 	bindEvents() {
 		onClick(this, this.view3d.dom, (event) => {
-			if (!this.mesh) return;
+			if (!this.mesh || this.isHeavyMesh()) return;
 			const hit = this.view3d.raycast(event, [this.mesh])[0];
 			this.store.set({ selected: hit ? hit.faceIndex : null });
 		});
@@ -339,8 +405,14 @@ class UVStrategiesLab extends Lab {
 		this.uvView.handlers.cursorAt = (uv) => this.triangleAtUV(uv) != null ? 'pointer' : 'default';
 	}
 
+	// Por encima de HEAVY_MESH_TRIANGLE_LIMIT se desactivan selección, costuras y el resaltado por
+	// triángulo del panel UV (ver comentario junto a la constante).
+	isHeavyMesh() {
+		return !!this.data && this.data.triangleCount > HEAVY_MESH_TRIANGLE_LIMIT;
+	}
+
 	triangleAtUV(uv) {
-		if (!this.data) return null;
+		if (!this.data || this.isHeavyMesh()) return null;
 		const query = new THREE.Vector3(uv[0], uv[1], 0);
 		const barycentric = new THREE.Vector3();
 		const triangle = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
@@ -358,14 +430,22 @@ class UVStrategiesLab extends Lab {
 	buildControls(element) {
 		const panel = (this.panel = new ControlPanel(element, this.store));
 		panel.idea(this.config.concept);
-		panel.select('case', 'Caso', UV_STRATEGY_CASES);
-		if (this.caseId === 'generacion') panel.select('object', 'Objeto', GENERATED_OBJECTS);
-		if (this.caseId !== 'unwrap') panel.segmented('textureMode', 'Textura aplicada', [
-			{ value: 'real', label: 'Del caso' },
-			{ value: 'diagnostic', label: 'UV diagnóstica' },
-		]);
+		if (this.caseId === 'generacion') {
+			panel.select('object', 'Objeto', GENERATED_OBJECTS);
+			this.sectionSlider = panel.slider('sectionT', 'Posición de la sección (v · recorrido)', { min: 0, max: 1, step: 0.01 });
+			this.sectionSliderWrap = this.sectionSlider.closest('.ctl');
+		}
+		if (this.caseId !== 'unwrap') {
+			const textureOptions = [
+				{ value: 'real', label: 'Del caso' },
+				{ value: 'diagnostic', label: 'UV diagnóstica' },
+			];
+			if (this.caseId === 'generacion') textureOptions.push({ value: 'landscape', label: 'Paisaje' });
+			panel.segmented('textureMode', 'Textura aplicada', textureOptions);
+		}
 		panel.title('Visualización');
 		panel.checkbox('wire', 'Mostrar wireframe');
+		if (this.caseId === 'unwrap') panel.checkbox('wireUV', 'Mostrar wireframe en UV');
 		if (this.caseId === 'generacion' || this.caseId === 'cilindrica' || this.caseId === 'unwrap') panel.checkbox('seams', 'Mostrar costura');
 		if (['planar', 'cilindrica', 'caja'].includes(this.caseId)) panel.checkbox('reference', 'Mostrar referencia de proyección');
 		if (this.caseId === 'caja') {
@@ -387,6 +467,8 @@ class UVStrategiesLab extends Lab {
 		if (patch.textureMode || patch.object || patch.boxColors) this.updateMaterial();
 		if (patch.selected || Object.prototype.hasOwnProperty.call(patch, 'selected')) this.updateSelection();
 		if (patch.uvFilter && this.store.state.selected != null && !this.isTriangleVisible(this.store.state.selected)) this.store.state.selected = null;
+		if (patch.sectionT) this.updateSectionRing();
+		if (this.sectionSliderWrap) this.sectionSliderWrap.style.display = this.data?.tube ? '' : 'none';
 		this.applyVisibility();
 		this.invalidate();
 	}
@@ -394,8 +476,10 @@ class UVStrategiesLab extends Lab {
 	caseTexture() {
 		const state = this.store.state;
 		if (state.textureMode === 'diagnostic') return this.textures.diagnostic;
+		if (state.textureMode === 'landscape') return this.textures.landscape;
 		if (this.caseId === 'generacion') {
-			if (state.object === 'tube') return this.textures.sweep;
+			if (state.object === 'tube') return this.textures.tube;
+			if (state.object === 'bottle') return this.textures.cola;
 			if (state.object === 'sphere') return this.textures.earth?.image?.complete ? this.textures.earth : this.textures.diagnostic;
 			return this.textures.checker;
 		}
@@ -453,35 +537,44 @@ class UVStrategiesLab extends Lab {
 		}
 		drawUnitSquare(ctx, view, 'rgba(255,255,255,.65)');
 		const selected = this.store.state.selected;
-		for (let t = 0; t < this.data.triangleCount; t++) {
-			if (!this.isTriangleVisible(t)) continue;
-			this.uvTrianglePath(ctx, view, t);
-			if (this.caseId === 'caja' && this.store.state.boxColors) {
-				ctx.fillStyle = `${AXIS_COLORS[this.data.groups[t]]}99`;
-				ctx.fill();
-			} else if (selected != null && selected !== t) {
-				ctx.fillStyle = 'rgba(6,9,14,.32)';
-				ctx.fill();
+		const heavy = this.isHeavyMesh();
+		const showWireUV = this.store.state.wireUV;
+		if (!heavy) {
+			for (let t = 0; t < this.data.triangleCount; t++) {
+				if (!this.isTriangleVisible(t)) continue;
+				this.uvTrianglePath(ctx, view, t);
+				if (this.caseId === 'caja' && this.store.state.boxColors) {
+					ctx.fillStyle = `${AXIS_COLORS[this.data.groups[t]]}99`;
+					ctx.fill();
+				} else if (selected != null && selected !== t) {
+					ctx.fillStyle = 'rgba(6,9,14,.32)';
+					ctx.fill();
+				}
+				if (showWireUV) {
+					ctx.strokeStyle = 'rgba(255,255,255,.28)';
+					ctx.lineWidth = 1;
+					ctx.stroke();
+				}
 			}
-			ctx.strokeStyle = 'rgba(255,255,255,.28)';
-			ctx.lineWidth = 1;
-			ctx.stroke();
-		}
-		if (this.store.state.seams) this.drawUvSeams(ctx, view);
-		if (selected != null && this.isTriangleVisible(selected)) {
-			this.uvTrianglePath(ctx, view, selected);
-			ctx.fillStyle = 'rgba(255,216,77,.52)';
-			ctx.fill();
-			ctx.strokeStyle = '#ffd84d';
-			ctx.lineWidth = 2.5;
-			ctx.stroke();
+			if (this.store.state.seams) this.drawUvSeams(ctx, view);
+			if (selected != null && this.isTriangleVisible(selected)) {
+				this.uvTrianglePath(ctx, view, selected);
+				ctx.fillStyle = 'rgba(255,216,77,.52)';
+				ctx.fill();
+				ctx.strokeStyle = '#ffd84d';
+				ctx.lineWidth = 2.5;
+				ctx.stroke();
+			}
+		} else {
+			if (showWireUV) this.drawHeavyUvWireframe(ctx, view);
+			drawTag(ctx, [`${this.data.triangleCount.toLocaleString('es')} triángulos`, 'resaltado por triángulo desactivado'], 8, 8, { color: '#dbe7fa' });
 		}
 		if (this.caseId === 'caja') {
 			const active = this.store.state.uvFilter === 'all' ? 'X / Y / Z superpuestos' : `Solo proyección ${this.store.state.uvFilter.toUpperCase()}`;
 			drawTag(ctx, active, view.w - 8, 8, { align: 'right', color: '#dbe7fa' });
 		}
 		if (this.caseId === 'generacion' && this.store.state.object === 'tube') {
-			drawTag(ctx, ['u → a lo largo del recorrido', 'v ↑ alrededor de la sección'], view.w - 8, view.h - 60, { align: 'right', color: '#dbe7fa' });
+			drawTag(ctx, ['u → alrededor de la sección', 'v ↑ a lo largo del recorrido'], view.w - 8, view.h - 60, { align: 'right', color: '#dbe7fa' });
 		}
 		drawRuler(ctx, view);
 	}
@@ -495,6 +588,28 @@ class UVStrategiesLab extends Lab {
 			else ctx.moveTo(point[0], point[1]);
 		}
 		ctx.closePath();
+	}
+
+	// Wireframe UV de una malla pesada: todas las aristas en un solo path/stroke (en vez de un
+	// stroke por triángulo) para poder mostrarlo también cuando el resaltado por triángulo está
+	// desactivado por rendimiento.
+	drawHeavyUvWireframe(ctx, view) {
+		ctx.save();
+		ctx.strokeStyle = 'rgba(255,255,255,.22)';
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		for (let t = 0; t < this.data.triangleCount; t++) {
+			if (!this.isTriangleVisible(t)) continue;
+			for (let k = 0; k < 3; k++) {
+				const uv = this.data.uvAt(t, k);
+				const point = view.toPx(uv[0], uv[1]);
+				if (k) ctx.lineTo(point[0], point[1]);
+				else ctx.moveTo(point[0], point[1]);
+			}
+			ctx.closePath();
+		}
+		ctx.stroke();
+		ctx.restore();
 	}
 
 	drawUvSeams(ctx, view) {
@@ -516,23 +631,30 @@ class UVStrategiesLab extends Lab {
 	}
 
 	async loadUnwrapCase() {
-		this.setAssetNotice('Esperando modelo…', 'Agregá modelo-unwrap.glb y modelo-unwrap-atlas.png dentro de maps.');
-		const atlasPromise = new Promise((resolve) => {
-			this.textures.atlas = loadColorTexture(ASSET_URLS.unwrapAtlas, (texture) => resolve(texture), () => resolve(null));
-		});
-		const modelPromise = new Promise((resolve, reject) => new GLTFLoader().load(ASSET_URLS.unwrapModel, resolve, undefined, reject));
+		this.setAssetNotice('Cargando modelo…', 'Leyendo el GLB y extrayendo su textura embebida (puede tardar unos segundos).');
 		try {
-			const [gltf, atlas] = await Promise.all([modelPromise, atlasPromise]);
+			const gltf = await new Promise((resolve, reject) => new GLTFLoader().load(ASSET_URLS.unwrapModel, resolve, undefined, reject));
 			if (this.disposed) return;
-			if (!atlas) throw new Error('No se encontró modelo-unwrap-atlas.png.');
+			const atlas = extractGlbTexture(gltf.scene);
+			if (!atlas) throw new Error('El GLB no tiene ningún material con textura (material.map) para usar como atlas.');
+			atlas.colorSpace = THREE.SRGBColorSpace;
+			atlas.needsUpdate = true;
+			this.textures.atlas = atlas;
 			const geometry = combineModelMeshes(gltf.scene);
 			this.mountData(dataFromModelGeometry(geometry));
 			this.updateMaterial();
-			this.setAssetNotice('', '');
+			if (this.data.triangleCount > HEAVY_MESH_TRIANGLE_LIMIT) {
+				this.setAssetNotice(
+					'Modelo de muy alto detalle',
+					`${this.data.triangleCount.toLocaleString('es')} triángulos: se omiten costuras y selección por triángulo para mantener la vista fluida. Se muestran el modelo texturizado y el atlas.`
+				);
+			} else {
+				this.setAssetNotice('', '');
+			}
 		} catch (error) {
 			if (this.disposed) return;
 			this.resourceError = error.message;
-			this.setAssetNotice('Recursos pendientes', 'El caso quedará activo al agregar el GLB y su atlas en maps, sin cambiar el código.');
+			this.setAssetNotice('Recursos pendientes', `No se pudo cargar el modelo: ${error.message}`);
 			this.invalidate();
 		}
 	}
@@ -553,9 +675,10 @@ class UVStrategiesLab extends Lab {
 	updateReadout() {
 		let html;
 		if (!this.data) {
-			html = '<span class="k">Modelo y atlas</span><br><code>maps/modelo-unwrap.glb</code><br><code>maps/modelo-unwrap-atlas.png</code>';
+			html = '<span class="k">Cargando el modelo…</span>';
 		} else if (this.store.state.selected == null) {
-			html = `<span class="k">Estrategia</span><br>${this.data.strategy}<br><span class="k">${this.data.triangleCount} triángulos · seleccioná uno en cualquier vista.</span>`;
+			const hint = this.isHeavyMesh() ? 'selección por triángulo desactivada (modelo muy pesado)' : 'seleccioná uno en cualquier vista.';
+			html = `<span class="k">Estrategia</span><br>${this.data.strategy}<br><span class="k">${this.data.triangleCount.toLocaleString('es')} triángulos · ${hint}</span>`;
 		} else {
 			const t = this.store.state.selected;
 			const values = [0, 1, 2].map((k) => this.data.uvAt(t, k));

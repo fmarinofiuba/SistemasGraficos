@@ -118,7 +118,7 @@ class WrappingLab extends Lab {
 		this.mesh = new THREE.Mesh(geometry, this.material);
 		this.wireMesh = new THREE.Mesh(
 			geometry,
-			new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.4 })
+			new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.4 })
 		);
 		scene.add(this.mesh, this.wireMesh);
 		this.geoKind = 'plane';

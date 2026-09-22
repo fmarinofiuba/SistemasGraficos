@@ -33,21 +33,19 @@ export class TriangleUVLab extends TriangleBase {
 		p.checkbox('showXYZ', 'Mostrar posiciones XYZ');
 		p.checkbox('showUV', 'Mostrar coordenadas UV');
 		p.checkbox('wire', 'Mostrar wireframe');
-		p.buttons(
-			{
-				label: 'UV predeterminados',
-				onClick: () => {
-					this.uv = DEFAULT_UV.map((u) => [...u]);
-					this.updateGeometry();
-				},
+		p.buttons({
+			label: 'UV predeterminados',
+			onClick: () => {
+				this.uv = DEFAULT_UV.map((u) => [...u]);
+				this.updateGeometry();
 			},
-			{
-				label: 'Triángulo predeterminado',
-				onClick: () => {
-					this.pos = DEFAULT_POS.map((q) => new THREE.Vector3(...q));
-					this.updateGeometry();
-				},
-			}
-		);
+		});
+		p.buttons({
+			label: 'Triángulo predeterminado',
+			onClick: () => {
+				this.pos = DEFAULT_POS.map((q) => new THREE.Vector3(...q));
+				this.updateGeometry();
+			},
+		});
 	}
 }

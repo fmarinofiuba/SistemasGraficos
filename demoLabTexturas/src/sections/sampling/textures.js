@@ -2,15 +2,6 @@
 // Fila 0 = borde inferior de la textura (v = 0), igual que un DataTexture de Three.js sin flipY.
 export const TEX_N = 16;
 
-function hsl(h, s, l) {
-	s /= 100;
-	l /= 100;
-	const k = (n) => (n + h / 30) % 12;
-	const a = s * Math.min(l, 1 - l);
-	const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-	return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
-}
-
 function build(fn) {
 	const data = new Uint8Array(TEX_N * TEX_N * 4);
 	for (let j = 0; j < TEX_N; j++)
@@ -25,11 +16,26 @@ function build(fn) {
 	return data;
 }
 
-// Colores bien distintos entre vecinos: se ve con claridad qué texel(es) elige el sampler.
-function texelColors() {
-	let seed = 7;
-	const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
-	return build(() => hsl(Math.floor(rnd() * 12) * 30 + rnd() * 10, 65 + rnd() * 30, 38 + rnd() * 28));
+// Mosaico de azulejos: un motivo de 4 × 4 con bordes bien definidos, repetido de forma regular
+// (no aleatoria) para que se lea como un patrón, con más colores que un checker de dos tonos.
+const MOSAIC_PALETTE = [
+	[214, 64, 64], // rojo teja
+	[230, 160, 50], // ocre
+	[64, 150, 214], // celeste
+	[70, 180, 120], // verde
+	[180, 90, 200], // violeta
+	[230, 200, 60], // amarillo
+	[90, 110, 200], // azul
+	[220, 110, 150], // rosa
+];
+const MOSAIC_MOTIF = [
+	[0, 1, 1, 2],
+	[3, 4, 4, 5],
+	[3, 4, 4, 5],
+	[6, 7, 7, 0],
+];
+function mosaic() {
+	return build((i, j) => MOSAIC_PALETTE[MOSAIC_MOTIF[j % 4][i % 4]]);
 }
 
 // Gradiente rojo (U) / verde (V) con tramas alternadas: cada texel se identifica por su color.
@@ -45,7 +51,7 @@ function checker() {
 }
 
 export const SAMPLING_TEXTURES = [
-	{ value: 'texels', label: 'Texels de colores', data: texelColors() },
+	{ value: 'texels', label: 'Mosaico de colores', data: mosaic() },
 	{ value: 'numbered', label: 'Cuadrícula UV numerada', data: numbered(), numbered: true },
 	{ value: 'checker', label: 'Checker', data: checker() },
 ];

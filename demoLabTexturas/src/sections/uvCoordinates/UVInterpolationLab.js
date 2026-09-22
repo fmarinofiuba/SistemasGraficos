@@ -36,7 +36,8 @@ export class UVInterpolationLab extends TriangleBase {
 			vertexDrag3D: false,
 			tag3d: 'Arrastrar P sobre el triángulo · fondo: orbitar',
 			idea: 'Dentro del triángulo, las coordenadas UV se obtienen interpolando los UV de sus tres vértices. El sampler utiliza ese resultado para consultar la textura.',
-			extraState: { mode: 'move', speed: 1, showBary: true, showTexels: true, showLines: true, step: 0, filter: 'nearest' },
+			grid: false,
+			extraState: { mode: 'move', speed: 1, showBary: true, showTexels: true, showLines: true, step: 0, filter: 'nearest', resolution: '1' },
 		});
 		this.bary = [0.3, 0.3, 0.4];
 		this.t = 0;
@@ -93,6 +94,11 @@ export class UVInterpolationLab extends TriangleBase {
 		if (!THREE.Triangle.getBarycoord(q, A, B, C, w)) return;
 		this.bary = this.clampBary([w.x, w.y, w.z]);
 		this.invalidate();
+	}
+
+	// Resolución elegida en el selector: la base (cfg.texSize) ×1, ×2 o ×4.
+	texSize() {
+		return this.cfg.texSize * Number(this.store.state.resolution);
 	}
 
 	pick3D(e) {
@@ -162,6 +168,12 @@ export class UVInterpolationLab extends TriangleBase {
 		p.select('filter', 'Filtro', [
 			{ value: 'nearest', label: 'Nearest' },
 			{ value: 'linear', label: 'Linear' },
+		]);
+		const [n, m] = [this.cfg.texSize, this.cfg.texSize];
+		p.select('resolution', 'Resolución de textura', [
+			{ value: '1', label: `${n}×${m} (base)` },
+			{ value: '2', label: `${n * 2}×${m * 2} (×2)` },
+			{ value: '4', label: `${n * 4}×${m * 4} (×4)` },
 		]);
 		p.slider('speed', 'Velocidad de animación', { min: 0.2, max: 3, step: 0.1, digits: 1 });
 		p.title('Visualización');
@@ -245,7 +257,7 @@ export class UVInterpolationLab extends TriangleBase {
 	drawUVExtra(ctx, v) {
 		const s = this.store.state;
 		const vis = this.vis();
-		const n = this.cfg.texSize;
+		const n = this.texSize();
 		drawTexelGrid(ctx, v, n, 'rgba(255,255,255,0.22)');
 		if (vis.texels && this.samp) {
 			for (const t of this.samp.texels) {

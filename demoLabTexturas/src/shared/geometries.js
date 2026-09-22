@@ -19,6 +19,33 @@ export function makeSphere(radius = 1.4) {
 	return new THREE.SphereGeometry(radius, 64, 32);
 }
 
+// Cubo con UV por defecto de BoxGeometry: cada una de las 6 caras repite la textura completa [0,1]².
+export function makeCube(size = 2.6) {
+	return new THREE.BoxGeometry(size, size, size);
+}
+
+// Cilindro con UV por defecto de CylinderGeometry: en la pared u recorre 0..1 (0°..360°) y v la altura;
+// en las tapas (x,z) se proyecta de forma plana sobre [0,1]².
+export function makeCylinder(radius = 1.3, height = 2.9, radialSegments = 48, heightSegments = 1) {
+	return new THREE.CylinderGeometry(radius, radius, height, radialSegments, heightSegments, false);
+}
+
+// Marcador de punto en 3D: dos esferas anidadas (borde negro + relleno de color) sin test de profundidad,
+// para que se vea como un punto plano de tamaño constante independientemente del ángulo de vista.
+export function makePointMarker({ color = 0xffd84d, radius = 0.045, border = 0.014 } = {}) {
+	const group = new THREE.Group();
+	const outer = new THREE.Mesh(
+		new THREE.SphereGeometry(radius + border, 16, 12),
+		new THREE.MeshBasicMaterial({ color: 0x000000, depthTest: false })
+	);
+	const inner = new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), new THREE.MeshBasicMaterial({ color, depthTest: false }));
+	outer.renderOrder = 9;
+	inner.renderOrder = 10;
+	group.add(outer, inner);
+	group.userData.setColor = (c) => inner.material.color.set(c);
+	return group;
+}
+
 // Punto y normal interpolados en el punto de impacto de un raycast (en coordenadas de mundo).
 export function hitNormalWorld(hit) {
 	const geo = hit.object.geometry;

@@ -7,9 +7,15 @@ import { ControlPanel } from '../../layout/ControlPanel.js';
 import { createStore } from '../../app/AppState.js';
 import { VOLUME_KINDS, VOLUME_VS, VOLUME_FS, createVolumeTexture, drawSliceToCanvas, volumeColor } from '../../shared/volumes.js';
 import { rgbCss } from '../../shared/textures.js';
+import { makeTeapot } from '../../shared/geometries.js';
 import { drawRuler, drawUnitSquare, drawTag, fmt } from '../../shared/uvDraw.js';
 
 const AXIS = { U: '#ff8a5c', V: '#59d38c', W: '#5ea8ff' };
+
+const OBJECT_KINDS = [
+	{ value: 'rock', label: 'Piedra irregular' },
+	{ value: 'teapot', label: 'Tetera' },
+];
 
 function makeDeformedSphere() {
 	const g = new THREE.IcosahedronGeometry(0.62, 5);
@@ -40,6 +46,7 @@ export class Texture3DLab extends Lab {
 		super();
 		this.store = createStore({
 			volume: 'bands',
+			object: 'rock',
 			cutW: 0.5,
 			transform: 'translate',
 			showCube: true,
@@ -52,6 +59,7 @@ export class Texture3DLab extends Lab {
 		this.localPoint = null;
 		this.volTex = null;
 		this.matsToUpdate = [];
+		this.geos = { rock: makeDeformedSphere(), teapot: makeTeapot(1.05, 10) };
 
 		this.left = new Scene3DView(layout.left, {
 			position: [3.4, 2.4, 4.4],
@@ -105,7 +113,7 @@ export class Texture3DLab extends Lab {
 
 	buildLeft() {
 		const sc = this.left.scene;
-		this.obj = new THREE.Mesh(makeDeformedSphere(), this.volumeMaterial({}));
+		this.obj = new THREE.Mesh(this.geos[this.store.state.object], this.volumeMaterial({}));
 		this.obj.material.side = THREE.DoubleSide;
 		sc.add(this.obj);
 
@@ -233,6 +241,7 @@ export class Texture3DLab extends Lab {
 		const p = (this.panel = new ControlPanel(el, this.store));
 		p.idea('Una textura 3D contiene datos en un volumen. Cada punto de la superficie consulta el volumen usando tres coordenadas: U, V y W.');
 		p.select('volume', 'Volumen', VOLUME_KINDS);
+		p.select('object', 'Objeto', OBJECT_KINDS);
 		p.slider('cutW', 'Corte W', { min: 0, max: 1, step: 0.01 });
 		p.segmented('transform', 'Transformación del objeto', [
 			{ value: 'translate', label: 'Mover' },
@@ -272,6 +281,14 @@ export class Texture3DLab extends Lab {
 			this.volTex.needsUpdate = true;
 		}
 		if ('cutW' in patch) this.sliceDirty = true;
+		if (patch.object) {
+			this.obj.geometry = this.geos[s.object];
+			this.obj.position.set(0, 0, 0);
+			this.obj.rotation.set(0, 0, 0);
+			this.obj.scale.set(1, 1, 1);
+			this.localPoint = null;
+			this.store.state.uvw = null;
+		}
 		this.tc.setMode(s.transform);
 		const z = s.cutW * 2 - 1;
 		for (const m of [this.planeL, this.planeFrameL, this.planeR, this.planeFrameR]) {
@@ -389,5 +406,6 @@ export class Texture3DLab extends Lab {
 		this.slice.dispose();
 		this.panel.dispose();
 		this.volTex?.dispose();
+		Object.values(this.geos).forEach((g) => g.dispose());
 	}
 }

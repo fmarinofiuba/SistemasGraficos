@@ -106,7 +106,7 @@ export class FullMeshUVLab extends Lab {
 		g.setAttribute('aSel', new THREE.BufferAttribute(new Float32Array(m.T * 3), 1));
 		this.mesh = new THREE.Mesh(g, this.matTex);
 		sc.add(this.mesh);
-		this.wireMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent: true, opacity: 0.3 }));
+		this.wireMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3 }));
 		sc.add(this.wireMesh);
 
 		const seamPts = [];
