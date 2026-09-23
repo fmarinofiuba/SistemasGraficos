@@ -228,9 +228,9 @@ export function loadColorTexture(url, onLoad, onError) {
 }
 
 export const ASSET_URLS = {
-	terrain: new URL('../../../maps/terrain-planar-topdown.png', import.meta.url).href,
-	cylindricalStone: new URL('../../../maps/piedra-cilindrica-seamless.png', import.meta.url).href,
-	boxRock: new URL('../../../maps/roca-box-seamless.png', import.meta.url).href,
+	terrain: new URL('../../../maps/terrain-planar-topdown.jpg', import.meta.url).href,
+	cylindricalStone: new URL('../../../maps/piedra-cilindrica-seamless.jpg', import.meta.url).href,
+	boxRock: new URL('../../../maps/roca-box-seamless.jpg', import.meta.url).href,
 	earth: new URL('../../../maps/earth.jpg', import.meta.url).href,
 	// El atlas viaja embebido dentro del GLB (imagen JPEG por bufferView): no hace falta un PNG aparte.
 	unwrapModel: new URL('../../../models/unwrap-example.glb', import.meta.url).href,

@@ -10,7 +10,7 @@ import { loadSpriteSheet } from './textures.js';
 const COLS = 4;
 const ROWS = 4;
 const FRAMES = COLS * ROWS;
-const HORSE_URL = `${import.meta.env.BASE_URL}horse.png`;
+const HORSE_URL = `${import.meta.env.BASE_URL}horse.jpg`;
 
 // Rectángulo UV (offset + tamaño) del cuadro `frame` (0-indexado, recorrido por filas de la imagen).
 // La V de una textura crece hacia arriba, así que la fila 0 de la imagen (la de arriba) cae en la V más alta.

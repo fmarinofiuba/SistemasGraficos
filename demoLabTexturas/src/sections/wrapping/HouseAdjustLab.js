@@ -23,13 +23,13 @@ const DOOR_H = 1.8;
 // Cada material define su textura, el estado inicial (deliberadamente incorrecto),
 // el estado objetivo (elegido visualmente) y una tolerancia amplia para la comprobación opcional.
 const MATERIALS = {
-	grass: { label: 'Pasto', file: 'pasto.png', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2, repV: 2 } },
-	stone: { label: 'Piedra', file: 'piedras.png', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2, repV: 2 } },
-	brick: { label: 'Ladrillos', file: 'ladrillos.png', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2.5, repV: 2 } },
-	roof: { label: 'Tejas', file: 'tejas.png', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 1.5, repV: 1.5 } },
+	grass: { label: 'Pasto', file: 'pasto.jpg', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2, repV: 2 } },
+	stone: { label: 'Piedra', file: 'piedras.jpg', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2, repV: 2 } },
+	brick: { label: 'Ladrillos', file: 'ladrillos.jpg', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 2.5, repV: 2 } },
+	roof: { label: 'Tejas', file: 'tejas.jpg', initial: { repU: 0.25, repV: 0.25 }, target: { repU: 1.5, repV: 1.5 } },
 	door: {
 		label: 'Puerta',
-		file: 'puerta.png',
+		file: 'puerta.jpg',
 		offset: true,
 		initial: { repU: 2.5, repV: 1.6, offU: 0.35, offV: -0.25 },
 		target: { repU: 0.66, repV: 1.01, offU: 0.17, offV: 0 },

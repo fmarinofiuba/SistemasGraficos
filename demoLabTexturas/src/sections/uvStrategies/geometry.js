@@ -103,10 +103,18 @@ function generatedSphere() {
 
 // TubeGeometry devuelve por defecto u → a lo largo del recorrido, v → alrededor de la sección.
 // Se invierten para que coincida con la convención del resto del capítulo (como en el cilindro:
-// u → ángulo/sección, v → altura/recorrido).
+// u → ángulo/sección, v → altura/recorrido). Un intercambio simple (u,v) → (v,u) es una reflexión
+// (determinante -1): invierte el sentido de giro de la UV respecto al winding de los triángulos y
+// la textura queda en espejo. Por eso se combina con un flip de un solo eje, (u,v) → (1-v, u), que
+// es una rotación de 90° (orientación preservada) y deja "recorrido" avanzando en el mismo sentido
+// que la curva original.
 function swapUV(geometry) {
 	const uv = geometry.attributes.uv;
-	for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i), uv.getX(i));
+	for (let i = 0; i < uv.count; i++) {
+		const u = uv.getX(i);
+		const v = uv.getY(i);
+		uv.setXY(i, 1 - v, u);
+	}
 	uv.needsUpdate = true;
 }
 
