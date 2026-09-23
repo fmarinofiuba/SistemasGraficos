@@ -203,7 +203,7 @@ class AliasingLab extends Lab {
 		scene.add(this.frustum.group, this.camBody);
 
 		this.camLabel = createLabelSprite('Cámara', '#56c8ff');
-		this.fpLabel = createLabelSprite('Footprint', YELLOW);
+		this.fpLabel = createLabelSprite('Huella del píxel', YELLOW);
 		scene.add(this.camLabel, this.fpLabel);
 
 		onClick(this, view.dom, (e) => {
@@ -256,7 +256,7 @@ class AliasingLab extends Lab {
 			camera();
 			p.title('Visualización');
 		} else {
-			p.idea('Los mipmaps reducen el aliasing usando versiones de menor resolución cuando el footprint es grande. La anisotropía mejora el muestreo cuando ese footprint es muy alargado.');
+			p.idea('Los mipmaps reducen el aliasing usando versiones de menor resolución cuando la huella del píxel es grande. La anisotropía mejora el muestreo cuando esa huella del píxel es muy alargada.');
 			p.title('Mipmaps y anisotropía');
 			p.segmented('mip', 'Mipmaps', [
 				{ value: false, label: 'Sin mipmaps' },
@@ -280,7 +280,7 @@ class AliasingLab extends Lab {
 			p.title('Visualización');
 			p.checkbox('showMip', 'Mostrar nivel MIP');
 		}
-		p.checkbox('footprint', 'Mostrar footprint');
+		p.checkbox('footprint', 'Mostrar huella del píxel');
 		p.checkbox('camera', 'Mostrar cámara (escena 3D)');
 		p.buttons({ label: 'Restablecer vista', onClick: () => this.resetAll() });
 		this.readout = p.readout();
@@ -365,7 +365,7 @@ class AliasingLab extends Lab {
 		}
 		const r = this.info;
 		let html = `<span class="k">Píxel</span> <code>(${i}, ${j})</code> <span class="k">a</span> <code>${num(fp.center.t)} u</code><br>
-			<span class="k">Footprint en la textura</span><br><code>${num(r.major)} × ${num(r.minor)} texels</code><br>
+			<span class="k">Huella del píxel en la textura</span><br><code>${num(r.major)} × ${num(r.minor)} texels</code><br>
 			<span class="k">Alargamiento</span> <code>${num(r.major / r.minor)} : 1</code>`;
 		if (this.tab === 2) {
 			const p = this.params;
@@ -396,7 +396,7 @@ class AliasingLab extends Lab {
 
 	// La vista "Escena 3D" no es donde se enseña el aliasing (para eso están el viewport y el
 	// espacio UV, que sí respetan mip/aniso/filtro elegidos); acá el piso solo sirve de referencia
-	// para ubicar cámara, footprint y frustum, así que siempre usa el mejor filtrado disponible.
+	// para ubicar cámara, huella del píxel y frustum, así que siempre usa el mejor filtrado disponible.
 	updateGPUTexture() {
 		const s = this.store.state;
 		const linear = s.filter === 'linear';
@@ -568,7 +568,7 @@ class AliasingLab extends Lab {
 			drawHandle(ctx, cx, cy, YELLOW, '', { r: 3.5, ring: false });
 			const top = pts.reduce((a, p) => (p[1] < a[1] ? p : a));
 			const r = this.info;
-			drawTag(ctx, [`footprint ≈ ${num(r.major)} × ${num(r.minor)} texels`, `alargamiento ${num(r.major / r.minor)} : 1`], top[0] + 8, top[1] - 38, { color: YELLOW });
+			drawTag(ctx, [`huella del píxel ≈ ${num(r.major)} × ${num(r.minor)} texels`, `alargamiento ${num(r.major / r.minor)} : 1`], top[0] + 8, top[1] - 38, { color: YELLOW });
 		}
 	}
 
@@ -661,7 +661,7 @@ export class AliasingTabLab extends AliasingLab {
 	static views = [{ title: 'Piso en perspectiva', stack: true }];
 	static help = [
 		'La barra superior elige la vista grande: Viewport (emulación por píxel), Escena 3D (GPU real) o Espacio UV.',
-		'Elegí un píxel con clic en el viewport o en el piso 3D. “Píxel cercano” y “Píxel lejano” comparan footprints pequeños y grandes.',
+		'Elegí un píxel con clic en el viewport o en el piso 3D. “Píxel cercano” y “Píxel lejano” comparan huellas del píxel pequeñas y grandes.',
 		'Movés la cámara con los sliders o con “Animar avance”: en la zona lejana el patrón parpadea y aparece moiré.',
 	];
 	constructor(layout) {
@@ -674,7 +674,7 @@ export class MipmapsTabLab extends AliasingLab {
 	static help = [
 		'Alterná “Sin mipmaps / Con mipmaps” y la anisotropía: la comparación es inmediata en el viewport y en la escena 3D.',
 		'Con “Mostrar nivel MIP” el viewport se tiñe por nivel y el espacio UV muestra la pirámide con el nivel usado resaltado.',
-		'Bajá la altura o la inclinación de la cámara para obtener footprints muy alargados: ahí la anisotropía marca la diferencia.',
+		'Bajá la altura o la inclinación de la cámara para obtener huellas del píxel muy alargadas: ahí la anisotropía marca la diferencia.',
 	];
 	constructor(layout) {
 		super(layout, 2, { filter: 'linear', mip: true, pitch: 8, height: 1.2, sel: [0.5, 0.55] });

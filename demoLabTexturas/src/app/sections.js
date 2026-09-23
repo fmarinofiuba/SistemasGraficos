@@ -80,7 +80,7 @@ const thumb5 = `
 <svg viewBox="0 0 300 165" xmlns="http://www.w3.org/2000/svg">
   <g transform="translate(14,24)"><path d="M6 78L100 78L84 8L22 8Z" fill="#3b4a7a" stroke="#56c8ff" stroke-width="2"/>
     <path d="M44 44L68 44L72 58L40 58Z" fill="#ffd84d" fill-opacity=".7" stroke="#ffd84d" stroke-width="2"/>
-    <text x="53" y="112" fill="#9aa3b2" font-size="12" text-anchor="middle">píxel · footprint</text></g>
+    <text x="53" y="112" fill="#9aa3b2" font-size="12" text-anchor="middle">píxel · huella del píxel</text></g>
   <path d="M128 60H152M144 52L152 60L144 68" stroke="#9aa3b2" fill="none" stroke-width="2"/>
   <g transform="translate(166,22)"><g stroke="#fff" stroke-opacity=".7">
     <rect width="30" height="30" fill="#c0504d"/><rect x="30" width="30" height="30" fill="#4d8dff"/><rect x="60" width="30" height="30" fill="#3ddc84"/>
@@ -159,7 +159,7 @@ export const SECTIONS = [
 		id: 'muestreo',
 		number: 5,
 		title: 'Muestreo y samplers',
-		blurb: 'De píxel a color: footprint sobre la superficie y en UV, y cómo Nearest y Linear producen el valor final.',
+		blurb: 'De píxel a color: huella del píxel sobre la superficie y en UV, y cómo Nearest y Linear producen el valor final.',
 		thumb: thumb5,
 		tabs: [
 			{ id: 'huella', title: 'Huella de píxel', Lab: PixelFootprintLab },

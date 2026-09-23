@@ -1,6 +1,6 @@
-// Texturas diagnósticas de baja resolución (16 × 16 texels) y el muestreo nearest / linear sobre ellas.
+// Texturas diagnósticas de baja resolución (32 × 32 texels) y el muestreo nearest / linear sobre ellas.
 // Fila 0 = borde inferior de la textura (v = 0), igual que un DataTexture de Three.js sin flipY.
-export const TEX_N = 16;
+export const TEX_N = 32;
 
 function build(fn) {
 	const data = new Uint8Array(TEX_N * TEX_N * 4);

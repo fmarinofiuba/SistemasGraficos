@@ -17,7 +17,7 @@ function canvas256() {
 }
 
 // Gris claro / gris oscuro (no blanco/negro puro): así el checker no compite visualmente con el
-// contorno rojo del frustum ni con el amarillo del footprint en la escena 3D.
+// contorno rojo del frustum ni con el amarillo de la huella del píxel en la escena 3D.
 function checker() {
 	const [c, g] = canvas256();
 	g.fillStyle = '#9a9fa8';

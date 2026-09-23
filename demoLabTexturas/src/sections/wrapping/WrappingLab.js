@@ -133,6 +133,16 @@ class WrappingLab extends Lab {
 			scene.add(m);
 			this.markers.push(m);
 		}
+		this.vertexMarkers = [0, 1, 2, 3].map(() => {
+			const m = new THREE.Mesh(
+				new THREE.SphereGeometry(0.075, 16, 12),
+				new THREE.MeshBasicMaterial({ color: 0x56c8ff, depthTest: false })
+			);
+			m.renderOrder = 10;
+			m.visible = false;
+			scene.add(m);
+			return m;
+		});
 
 		this.uvView = new TextureSpaceView(layout.center, {
 			center: [0.5, 0.5],
@@ -168,6 +178,10 @@ class WrappingLab extends Lab {
 		if (tab === 'modos' || tab === 'libre') {
 			p.title('Objeto y textura');
 			p.select('geometry', 'Geometría', WRAP_GEOMETRIES);
+			p.select('texture', 'Textura', WRAP_TEXTURES.map(({ value, label }) => ({ value, label })));
+		}
+		if (tab === 'offsetrepeat') {
+			p.title('Textura');
 			p.select('texture', 'Textura', WRAP_TEXTURES.map(({ value, label }) => ({ value, label })));
 		}
 		if (tab === 'modos') {
@@ -250,6 +264,67 @@ class WrappingLab extends Lab {
 		this.geoKind = kind;
 		this.view3d.home.position.set(...CAMERA[kind]);
 		this.view3d.resetCamera();
+		this.updateVertexMarkers();
+	}
+
+	// Marca los 4 vértices de la esquina del plano y muestra sus coordenadas UV.
+	updateVertexMarkers() {
+		const show = this.geoKind === 'plane';
+		if (!show) {
+			this.vertexMarkers.forEach((m, i) => {
+				m.visible = false;
+				this.view3d.labels.hide('vtx' + i);
+			});
+			return;
+		}
+		const pos = this.mesh.geometry.attributes.position;
+		const uv = this.mesh.geometry.attributes.uv;
+		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+		for (let i = 0; i < pos.count; i++) {
+			minX = Math.min(minX, pos.getX(i));
+			maxX = Math.max(maxX, pos.getX(i));
+			minY = Math.min(minY, pos.getY(i));
+			maxY = Math.max(maxY, pos.getY(i));
+		}
+		const wanted = [
+			[minX, maxY],
+			[maxX, maxY],
+			[maxX, minY],
+			[minX, minY],
+		];
+		this.vertexInfo = wanted.map(([x, y]) => {
+			for (let i = 0; i < pos.count; i++) {
+				if (Math.abs(pos.getX(i) - x) < 1e-6 && Math.abs(pos.getY(i) - y) < 1e-6) {
+					return { position: new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)), uv: [uv.getX(i), uv.getY(i)] };
+				}
+			}
+			return null;
+		});
+		this.vertexInfo.forEach((info, i) => {
+			const m = this.vertexMarkers[i];
+			m.visible = !!info;
+			if (info) m.position.copy(info.position);
+		});
+	}
+
+	renderVertexLabels() {
+		if (!this.vertexInfo) return;
+		const offsets = [
+			[-16, -14],
+			[8, -14],
+			[8, 8],
+			[-16, 8],
+		];
+		this.vertexInfo.forEach((info, i) => {
+			if (!info) return;
+			const [u, v] = info.uv;
+			this.view3d.labels.set('vtx' + i, {
+				html: `<small>uv (${fmt(u)}, ${fmt(v)})</small>`,
+				color: '#56c8ff',
+				position: info.position,
+				offset: offsets[i],
+			});
+		});
 	}
 
 	updateProbe() {
@@ -435,6 +510,7 @@ class WrappingLab extends Lab {
 	}
 
 	render() {
+		this.renderVertexLabels();
 		this.view3d.render();
 		this.uvView.render();
 	}

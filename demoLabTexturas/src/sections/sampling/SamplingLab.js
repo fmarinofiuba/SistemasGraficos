@@ -13,6 +13,8 @@ import { TEX_N, SAMPLING_TEXTURES, textureByValue, texelAt, sampleNearest, sampl
 const NEIGHBOR_COLORS = { A: '#ff6b6b', B: '#3ddc84', C: '#4d8dff', D: '#ffa94d' };
 const NO_SURFACE = '#0c0e12';
 const YELLOW = '#ffd84d';
+const USED_TEXEL_COLOR = '#ff5cf0';
+const MAX_TEXEL_MARKERS = 500;
 const GEO_KEYS = ['res', 'tilt', 'tilt2', 'texture', 'sel', 'filter'];
 
 const DEFAULTS = {
@@ -105,7 +107,7 @@ class SamplingLab extends Lab {
 		const view = (this.view3d = new Scene3DView(container, {
 			position: [7.5, 4.2, 12.5],
 			target: [0, 0, 3],
-			minDistance: 3,
+			minDistance: 0.15,
 			maxDistance: 40,
 			panLimit: 8,
 			onInvalidate: this.invalidate,
@@ -162,6 +164,20 @@ class SamplingLab extends Lab {
 			o.frustumCulled = false;
 			this.group.add(o);
 		}
+		// Centros de texel dentro de la huella del píxel: mismo estilo (punto blanco, borde negro) que el
+		// tab "Huella de píxel" usa en el espacio UV, pero llevado a la superficie 3D. Los que
+		// realmente intervienen en el cálculo del sampler se resaltan en otro color.
+		this.texelMarkers = [];
+		for (let k = 0; k < MAX_TEXEL_MARKERS; k++) {
+			const outer = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8), new THREE.MeshBasicMaterial({ ...overlay, color: 0x000000 }));
+			const inner = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), new THREE.MeshBasicMaterial({ ...overlay, color: 0xffffff }));
+			outer.renderOrder = inner.renderOrder = 6;
+			outer.frustumCulled = inner.frustumCulled = false;
+			outer.visible = inner.visible = false;
+			this.group.add(outer, inner);
+			this.texelMarkers.push({ outer, inner });
+		}
+
 		const eg = new THREE.BufferGeometry();
 		eg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(24), 3));
 		this.eyeLines = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ ...overlay, color: YELLOW, opacity: 0.55 }));
@@ -178,7 +194,7 @@ class SamplingLab extends Lab {
 		scene.add(this.frustum.group, this.camBody);
 
 		this.camLabel = createLabelSprite('Cámara', '#56c8ff');
-		this.fpLabel = createLabelSprite('Footprint', YELLOW);
+		this.fpLabel = createLabelSprite('Huella del píxel', YELLOW);
 		scene.add(this.camLabel, this.fpLabel);
 
 		this.model.moveToPreset('angle');
@@ -277,7 +293,9 @@ class SamplingLab extends Lab {
 		this.group.matrix.copy(m.planeMatrix);
 		this.group.updateMatrixWorld(true);
 		const tex = this.gpuTex[s.texture];
-		const filter = s.filter === 'linear' ? THREE.LinearFilter : THREE.NearestFilter;
+		// La superficie 3D siempre muestra la textura tal cual (sin filtrado): el filtro elegido
+		// solo afecta al viewport simulado y al espacio UV, que sí calculan el sampler por CPU.
+		const filter = this.mode === 'filter' ? THREE.NearestFilter : s.filter === 'linear' ? THREE.LinearFilter : THREE.NearestFilter;
 		if (tex.magFilter !== filter) {
 			for (const t of Object.values(this.gpuTex)) {
 				t.magFilter = t.minFilter = filter;
@@ -316,6 +334,34 @@ class SamplingLab extends Lab {
 			this.fpLabel.position.copy(this.centerWorld);
 		}
 		this.fpLabel.visible = show && !!this.centerWorld;
+		this.updateTexelMarkers(show);
+	}
+
+	// Marca, sobre la superficie 3D, los centros de texel que caen dentro de la huella del píxel (blanco) y,
+	// entre esos, los que realmente participan del cálculo del sampler (resaltados en otro color):
+	// un solo texel en Nearest, o los cuatro vecinos A-B-C-D en Linear.
+	updateTexelMarkers(show) {
+		if (!this.texelMarkers || this.mode !== 'filter') return;
+		const s = this.store.state;
+		const covered = show ? this.covered : [];
+		const used = new Set();
+		if (show && this.sample) {
+			if (s.filter === 'nearest') used.add(`${this.sample.nearest.i},${this.sample.nearest.j}`);
+			else for (const c of this.sample.linear.cells) used.add(`${c.i},${c.j}`);
+		}
+		covered.forEach(([i, j], k) => {
+			if (k >= MAX_TEXEL_MARKERS) return;
+			const { outer, inner } = this.texelMarkers[k];
+			const x = ((i + 0.5) / TEX_N - 0.5) * PLANE_SIZE;
+			const y = ((j + 0.5) / TEX_N - 0.5) * PLANE_SIZE;
+			outer.position.set(x, y, 0.014);
+			inner.position.set(x, y, 0.016);
+			outer.visible = inner.visible = true;
+			inner.material.color.set(used.has(`${i},${j}`) ? USED_TEXEL_COLOR : 0xffffff);
+		});
+		for (let k = covered.length; k < MAX_TEXEL_MARKERS; k++) {
+			this.texelMarkers[k].outer.visible = this.texelMarkers[k].inner.visible = false;
+		}
 	}
 
 	// ---------- dibujo: viewport ----------
@@ -428,6 +474,26 @@ class SamplingLab extends Lab {
 		ctx.stroke();
 	}
 
+	// Centros de texel dentro de la huella del píxel: punto blanco con borde negro, igual estética que en la
+	// escena 3D. `skip` deja afuera los que ya se resaltan con otro estilo (p. ej. los que usa el sampler).
+	drawCoveredTexelDots(ctx, view, skip = null) {
+		const cellPx = view.scale / TEX_N;
+		if (cellPx < 14) return;
+		ctx.save();
+		ctx.fillStyle = '#fff';
+		ctx.strokeStyle = '#000';
+		ctx.lineWidth = 1.5;
+		for (const [i, j] of this.covered) {
+			if (skip && skip.has(`${i},${j}`)) continue;
+			const [x, y] = view.toPx((i + 0.5) / TEX_N, (j + 0.5) / TEX_N);
+			ctx.beginPath();
+			ctx.arc(x, y, 3, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.stroke();
+		}
+		ctx.restore();
+	}
+
 	drawFootprintUV(ctx, view) {
 		const fp = this.fp;
 		if (!fp.valid) {
@@ -435,21 +501,7 @@ class SamplingLab extends Lab {
 			return;
 		}
 		this.drawFootprintPolygon(ctx, view);
-		const cellPx = view.scale / TEX_N;
-		if (cellPx >= 14) {
-			ctx.save();
-			ctx.fillStyle = '#fff';
-			ctx.strokeStyle = '#000';
-			ctx.lineWidth = 1.5;
-			for (const [i, j] of this.covered) {
-				const [x, y] = view.toPx((i + 0.5) / TEX_N, (j + 0.5) / TEX_N);
-				ctx.beginPath();
-				ctx.arc(x, y, 3, 0, Math.PI * 2);
-				ctx.fill();
-				ctx.stroke();
-			}
-			ctx.restore();
-		}
+		this.drawCoveredTexelDots(ctx, view);
 		if (fp.center) {
 			const [x, y] = view.toPx(fp.center[0], fp.center[1]);
 			drawHandle(ctx, x, y, YELLOW, '', { r: 4, ring: false });
@@ -457,7 +509,7 @@ class SamplingLab extends Lab {
 		const poly = fp.corners.map((p) => view.toPx(p[0], p[1]));
 		const top = poly.reduce((a, p) => (p[1] < a[1] ? p : a));
 		const area = areaInTexels(fp.corners, TEX_N);
-		drawTag(ctx, `footprint ≈ ${area < 10 ? area.toFixed(1) : Math.round(area)} texels²`, top[0] + 8, top[1] - 24, { color: YELLOW });
+		drawTag(ctx, `huella del píxel ≈ ${area < 10 ? area.toFixed(1) : Math.round(area)} texels²`, top[0] + 8, top[1] - 24, { color: YELLOW });
 	}
 
 	// Etiqueta en la esquina exterior del texel (A arriba-izq, B arriba-der, C abajo-izq, D abajo-der): no tapa al punto P.
@@ -480,6 +532,8 @@ class SamplingLab extends Lab {
 			drawTag(ctx, 'Este píxel no ve la superficie: no hay punto de muestreo', 34, 34, { color: '#ffbd70' });
 			return;
 		}
+		const used = new Set(s.filter === 'nearest' ? [`${smp.nearest.i},${smp.nearest.j}`] : smp.linear.cells.map((c) => `${c.i},${c.j}`));
+		this.drawCoveredTexelDots(ctx, view, used);
 		const [px, py] = view.toPx(smp.u, smp.v);
 		const box = (i, j, color, width) => {
 			const [x, y, sz] = this.cellRect(view, i, j);
@@ -565,7 +619,7 @@ export class PixelFootprintLab extends SamplingLab {
 	static help = [
 		'Clic (o arrastre) en el viewport simulado: elige el píxel. También se puede elegir con clic en el plano 3D o en la textura.',
 		'La escena 3D se orbita arrastrando; rueda: zoom. En la textura: rueda para zoom y botón derecho para paneo.',
-		'Cambiá la posición de cámara y la inclinación del plano: el footprint cambia de tamaño y forma tanto en la superficie como en UV.',
+		'Cambiá la posición de cámara y la inclinación del plano: la huella del píxel cambia de tamaño y forma tanto en la superficie como en UV.',
 	];
 
 	constructor(layout) {
@@ -598,7 +652,7 @@ export class PixelFootprintLab extends SamplingLab {
 
 	buildControls(el) {
 		const p = (this.panel = new ControlPanel(el, this.store));
-		p.idea('Un píxel de pantalla no equivale siempre a un texel. Cada píxel corresponde a una región sobre la superficie (su footprint) y a una región en el espacio UV, que puede cubrir uno o varios texels.');
+		p.idea('Un píxel de pantalla no equivale siempre a un texel. Cada píxel corresponde a una región sobre la superficie (su huella del píxel) y a una región en el espacio UV, que puede cubrir uno o varios texels.');
 		p.title('Escena');
 		p.select('res', 'Resolución del viewport', resOptions);
 		p.slider('tilt', 'Inclinación del plano (°)', { min: 0, max: 160, step: 1, digits: 0 });
@@ -607,7 +661,7 @@ export class PixelFootprintLab extends SamplingLab {
 		p.title('Posición de cámara');
 		p.buttons(...CAMERA_PRESETS.map((preset) => ({ label: preset.label, onClick: () => this.moveCameraToPreset(preset.value) })));
 		p.title('Visualización');
-		p.checkbox('footprint', 'Mostrar footprint');
+		p.checkbox('footprint', 'Mostrar huella del píxel');
 		p.checkbox('camera', 'Mostrar cámara');
 		p.checkbox('texels', 'Mostrar texels');
 		p.checkbox('wire', 'Mostrar wireframe');
@@ -626,10 +680,10 @@ export class PixelFootprintLab extends SamplingLab {
 		const [pi, pj] = this.selPixel;
 		const fp = this.fp;
 		let html = `<span class="k">Píxel</span> <code>(${pi}, ${pj})</code>`;
-		if (!fp.valid) html += '<br><span class="k">No ve la superficie completa: sin footprint.</span>';
+		if (!fp.valid) html += '<br><span class="k">No ve la superficie completa: sin huella del píxel.</span>';
 		else {
 			const a = areaInTexels(fp.corners, TEX_N);
-			html += `<br><span class="k">Footprint en UV</span> <code>≈ ${a.toFixed(2)} texels²</code>`;
+			html += `<br><span class="k">Huella del píxel en UV</span> <code>≈ ${a.toFixed(2)} texels²</code>`;
 			html += `<br><span class="k">Centros de texel dentro</span> <code>${this.covered.length}</code>`;
 		}
 		if (fp.center) html += `<br><span class="k">Centro</span> <code>(${fmt(fp.center[0], 3)}, ${fmt(fp.center[1], 3)})</code>`;
@@ -701,7 +755,7 @@ const PANES = [
 ];
 
 export class SamplerFilterLab extends SamplingLab {
-	static views = [{ title: 'Del footprint al color', stack: true }];
+	static views = [{ title: 'De la huella del píxel al color', stack: true }];
 	static help = [
 		'La barra superior elige qué vista se muestra grande: Viewport, Escena 3D o Espacio UV.',
 		'Cambiá de píxel con clic en el viewport, en el plano 3D o en el espacio UV (elige el píxel cuyo centro está más cerca).',
@@ -774,6 +828,8 @@ export class SamplerFilterLab extends SamplingLab {
 	buildControls(el) {
 		const p = (this.panel = new ControlPanel(el, this.store));
 		p.idea('El sampler transforma una coordenada UV continua en un color de la textura. Según el filtro, usa un solo texel o combina varios texels vecinos.');
+		p.title('Escena');
+		p.select('res', 'Resolución del viewport', resOptions);
 		p.title('Sampler');
 		p.segmented('filter', 'Filtro', [
 			{ value: 'nearest', label: 'Nearest' },
@@ -784,7 +840,7 @@ export class SamplerFilterLab extends SamplingLab {
 		p.checkbox('texels', 'Mostrar texels');
 		p.checkbox('labels', 'Mostrar etiquetas A-B-C-D');
 		p.checkbox('calc', 'Mostrar cálculo');
-		p.checkbox('footprint', 'Mostrar footprint');
+		p.checkbox('footprint', 'Mostrar huella del píxel');
 		p.buttons({ label: 'Restablecer vista', onClick: () => this.resetAll() });
 		this.readout = p.readout();
 	}
