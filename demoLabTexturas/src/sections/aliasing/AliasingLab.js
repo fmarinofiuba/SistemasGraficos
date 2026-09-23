@@ -6,7 +6,7 @@ import { ControlPanel } from '../../layout/ControlPanel.js';
 import { createStore } from '../../app/AppState.js';
 import { drawRuler, drawTag, drawHandle } from '../../shared/uvDraw.js';
 import { CanvasView } from '../sampling/CanvasView.js';
-import { FloorModel, FLOOR, FLOOR_TEXTURES, TILE, TEX_SIZE, MAX_LEVEL, buildMips, levelBytes, shade } from './floor.js';
+import { FloorModel, FLOOR, FLOOR_TEXTURES, TILE, TEX_SIZE, MAX_LEVEL, buildMips, levelBytes, shade, loadTextureImage } from './floor.js';
 import { createFrustumMesh, createMovieCamera, placeMovieCamera, createLabelSprite, disposeLabelSprite, fitLabelToScreen } from '../../shared/cameraRig.js';
 
 const YELLOW = '#ffd84d';
@@ -37,6 +37,7 @@ const DEFAULTS = {
 	sel: [0.5, 0.36],
 	footprint: true,
 	showMip: true,
+	zoomMip: true,
 	camera: true,
 	animate: false,
 	view: 'viewport',
@@ -65,7 +66,20 @@ class AliasingLab extends Lab {
 		this.textures = {};
 		for (const t of FLOOR_TEXTURES) {
 			const canvas = t.make();
-			this.textures[t.value] = { canvas, levels: buildMips(canvas), thumbs: new Map(), gpu: null, gpuLevels: new Map() };
+			const entry = (this.textures[t.value] = { canvas, levels: buildMips(canvas), thumbs: new Map(), gpu: null, gpuLevels: new Map() });
+			if (t.src) {
+				loadTextureImage(canvas, t.src)
+					.then(() => {
+						if (this.disposed) return;
+						entry.levels = buildMips(canvas);
+						entry.thumbs.clear();
+						entry.gpuLevels.forEach((x) => x.dispose());
+						entry.gpuLevels.clear();
+						if (entry.gpu) entry.gpu.needsUpdate = true;
+						this.applyState();
+					})
+					.catch((err) => console.warn(err.message));
+			}
 		}
 
 		const stack = layout.views[0];
@@ -223,6 +237,32 @@ class AliasingLab extends Lab {
 			tag: 'Rueda: zoom · Botón derecho: paneo · unidades = repeticiones de la textura',
 		});
 		this.uvView.drawFn = (ctx, v) => this.drawUV(ctx, v);
+		this.pyrRects = [];
+		this.mipHover = null;
+		this.mipPin = null;
+		const rowAt = (p) => this.pyrRects.find((r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h)?.l ?? null;
+		const h = this.uvView.handlers;
+		h.move = (uv, e, p) => {
+			const l = rowAt(p);
+			if (l !== this.mipHover) {
+				this.mipHover = l;
+				this.invalidate();
+			}
+		};
+		h.cursorAt = (uv, p) => (rowAt(p) !== null ? 'pointer' : null);
+		h.down = (uv, e, p) => {
+			const l = rowAt(p);
+			if (l === null) return false;
+			this.mipPin = this.mipPin === l ? null : l;
+			this.invalidate();
+			return true;
+		};
+		this.listen(this.uvView.canvas, 'pointerleave', () => {
+			if (this.mipHover !== null) {
+				this.mipHover = null;
+				this.invalidate();
+			}
+		});
 	}
 
 	// ---------- controles ----------
@@ -279,6 +319,7 @@ class AliasingLab extends Lab {
 			camera();
 			p.title('Visualización');
 			p.checkbox('showMip', 'Mostrar nivel MIP');
+			p.checkbox('zoomMip', 'Ampliar nivel MIP (resolución nativa)');
 		}
 		p.checkbox('footprint', 'Mostrar huella del píxel');
 		p.checkbox('camera', 'Mostrar cámara (escena 3D)');
@@ -597,25 +638,108 @@ class AliasingLab extends Lab {
 		const th = Math.max(16, Math.min(34, (view.h - 120) / levels.length - 14));
 		const x = view.w - th - 14;
 		let y = 66;
+		const boxLeft = x - 100;
 		ctx.fillStyle = 'rgba(10,12,16,0.78)';
-		ctx.fillRect(x - 100, 62, th + 114, y + levels.length * (th + 14) - 62 - 4);
+		ctx.fillRect(boxLeft, 62, th + 114, y + levels.length * (th + 14) - 62 - 4);
 		drawTag(ctx, label, view.w - 8, 38, { align: 'right', color: YELLOW });
+		const focus = this.mipHover ?? this.mipPin;
+		this.pyrRects = [];
 		ctx.save();
-		ctx.imageSmoothingEnabled = false;
 		levels.forEach((lv, l) => {
-			ctx.drawImage(this.levelThumb(s.texture, l), x, y, th, th);
+			const thumb = this.levelThumb(s.texture, l);
+			ctx.imageSmoothingEnabled = lv.size > th;
+			ctx.imageSmoothingQuality = 'high';
+			ctx.drawImage(thumb, x, y, th, th);
 			const on = used.has(l);
-			ctx.strokeStyle = on ? YELLOW : 'rgba(255,255,255,0.35)';
-			ctx.lineWidth = on ? 3 : 1;
+			const sel = focus === l;
+			ctx.strokeStyle = sel ? '#56c8ff' : on ? YELLOW : 'rgba(255,255,255,0.35)';
+			ctx.lineWidth = on || sel ? 3 : 1;
 			ctx.strokeRect(x, y, th, th);
 			ctx.font = '11px sans-serif';
 			ctx.textAlign = 'right';
 			ctx.textBaseline = 'middle';
-			ctx.fillStyle = on ? YELLOW : '#cfd5e0';
+			ctx.fillStyle = sel ? '#56c8ff' : on ? YELLOW : '#cfd5e0';
 			ctx.fillText(`MIP ${l} · ${lv.size}²`, x - 6, y + th / 2);
+			this.pyrRects.push({ l, x: boxLeft, y: y - 7, w: th + 114, h: th + 14 });
 			y += th + 14;
 		});
 		ctx.restore();
+		if (s.zoomMip) this.drawMipInspector(ctx, view, boxLeft, [...used][0], focus);
+	}
+
+	// Lupa del nivel MIP: muestra el nivel a resolución nativa (zoom entero, texels nítidos). Si el nivel no
+	// entra en el panel se recorta una ventana centrada en la huella del píxel. Por defecto muestra el
+	// nivel en uso; pasar el mouse por la columna lo cambia y un clic lo fija.
+	drawMipInspector(ctx, view, boxLeft, usedLevel, focus) {
+		const s = this.store.state;
+		const fp = this.fp;
+		const l = Math.min(MAX_LEVEL, focus ?? usedLevel);
+		const size = this.textures[s.texture].levels[l].size;
+		const maxSide = Math.min(460, boxLeft - 20, view.h - 62 - 40);
+		if (maxSide < 80) return;
+		const z = Math.max(1, Math.floor(maxSide / size));
+		const fits = size * z <= maxSide;
+		const P = fits ? size * z : maxSide;
+		const px0 = boxLeft - 12 - P;
+		const py0 = 62;
+		const img = this.levelThumb(s.texture, l);
+		const frac = (t) => t - Math.floor(t);
+		const cu = fp?.valid ? frac(fp.center.u) : 0.5;
+		const cv = fp?.valid ? frac(fp.center.v) : 0.5;
+		const xc = cu * size;
+		const yc = (1 - cv) * size;
+		const win = P / z;
+		const x0 = fits ? 0 : xc - win / 2;
+		const y0 = fits ? 0 : yc - win / 2;
+
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(px0, py0, P, P);
+		ctx.clip();
+		ctx.fillStyle = '#0c0e12';
+		ctx.fillRect(px0, py0, P, P);
+		ctx.imageSmoothingEnabled = false;
+		for (let ti = Math.floor(x0 / size); ti <= Math.floor((x0 + win) / size); ti++)
+			for (let tj = Math.floor(y0 / size); tj <= Math.floor((y0 + win) / size); tj++)
+				ctx.drawImage(img, px0 + (ti * size - x0) * z, py0 + (tj * size - y0) * z, size * z, size * z);
+		if (z >= 6) {
+			ctx.strokeStyle = 'rgba(255,90,90,0.35)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			for (let i = Math.ceil(x0); i <= x0 + win; i++) {
+				const gx = px0 + (i - x0) * z;
+				ctx.moveTo(gx, py0);
+				ctx.lineTo(gx, py0 + P);
+			}
+			for (let j = Math.ceil(y0); j <= y0 + win; j++) {
+				const gy = py0 + (j - y0) * z;
+				ctx.moveTo(px0, gy);
+				ctx.lineTo(px0 + P, gy);
+			}
+			ctx.stroke();
+		}
+		if (fp?.valid && s.footprint) {
+			const pts = fp.corners.map((c) => [px0 + (xc + (c.u - fp.center.u) * size - x0) * z, py0 + (yc - (c.v - fp.center.v) * size - y0) * z]);
+			ctx.beginPath();
+			pts.forEach((p, k) => (k ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+			ctx.closePath();
+			ctx.fillStyle = 'rgba(255,216,77,0.3)';
+			ctx.fill();
+			ctx.strokeStyle = '#000';
+			ctx.lineWidth = 4;
+			ctx.stroke();
+			ctx.strokeStyle = YELLOW;
+			ctx.lineWidth = 2;
+			ctx.stroke();
+			drawHandle(ctx, px0 + (xc - x0) * z, py0 + (yc - y0) * z, YELLOW, '', { r: 3.5, ring: false });
+		}
+		ctx.restore();
+		ctx.strokeStyle = focus === null ? YELLOW : '#56c8ff';
+		ctx.lineWidth = 2;
+		ctx.strokeRect(px0, py0, P, P);
+		const pinned = this.mipPin === l && this.mipHover === null ? ' · fijado' : '';
+		const crop = fits ? '' : ' · recorte';
+		drawTag(ctx, `MIP ${l} · ${size}×${size} texels · ${z}× (1 texel = ${z} px)${crop}${pinned}`, px0, py0 + P + 6, { color: focus === null ? YELLOW : '#56c8ff' });
 	}
 
 	levelThumb(key, l) {
@@ -643,6 +767,7 @@ class AliasingLab extends Lab {
 	}
 
 	dispose() {
+		this.disposed = true;
 		super.dispose();
 		// Sprite.geometry es un singleton compartido por todos los Sprites de la app: se saca de
 		// la escena antes del dispose() genérico para no liberar ese geometry compartido.
