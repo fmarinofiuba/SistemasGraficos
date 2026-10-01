@@ -17,7 +17,11 @@
     onedgedown = null,
     onenter = null,
     onleave = null,
+    only = null, // Set de ids: si se indica, solo se dibujan esos nodos y las aristas entre ellos
+    badges = null, // Map id -> texto: insignia numerada en la esquina del nodo
   } = $props();
+
+  const shown = (id) => !only || only.has(id);
 
   const uid = $props.id();
 </script>
@@ -28,7 +32,7 @@
   </marker>
 </defs>
 
-{#each layout.links as l (l.target.data.id)}
+{#each layout.links.filter((l) => shown(l.target.data.id) && shown(l.source.data.id)) as l (l.target.data.id)}
   {@const c = l.target}
   {@const p = l.source}
   {@const id = c.data.id}
@@ -57,7 +61,7 @@
   </g>
 {/each}
 
-{#each layout.nodes as n (n.data.id)}
+{#each layout.nodes.filter((n) => shown(n.data.id)) as n (n.data.id)}
   {@const d = n.data}
   {@const w = nodeW(doc, d)}
   {@const m = d.modelo ? doc.modelos[d.modelo] : null}
@@ -97,6 +101,12 @@
       fill={isRoot ? 'var(--bg)' : 'var(--text)'}
       pointer-events="none"
     >{nodeLabel(d)}</text>
+    {#if badges?.has(d.id)}
+      <g transform="translate({w / 2 - 1} {-NODE_H / 2 + 1})" pointer-events="none">
+        <circle r="9.5" fill="var(--accent)" stroke="#fff" stroke-width="1.5" />
+        <text text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="700" font-family="system-ui, Arial, sans-serif" fill="#fff">{badges.get(d.id)}</text>
+      </g>
+    {/if}
     {#if m && d.nombre}
       <text y={NODE_H / 2 + 11} text-anchor="middle" font-size="10" fill="var(--muted)" pointer-events="none">{d.nombre}</text>
     {/if}

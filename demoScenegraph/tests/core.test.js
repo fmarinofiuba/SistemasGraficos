@@ -207,3 +207,30 @@ describe('generator', () => {
     expect(ops.some((o) => o.op === 'E' && Math.abs(o.x) !== Math.abs(o.y))).toBe(true);
   });
 });
+
+// ---------- explicación paso a paso ----------
+
+import { describeOp, explainSteps } from '../src/core/explain.js';
+
+describe('explain', () => {
+  it('describe cada operación', () => {
+    expect(describeOp({ op: 'T', x: 0, y: -10 })).toBe('traslada −10 en Y');
+    expect(describeOp({ op: 'R', ang: 90 })).toContain('antihorario');
+    expect(describeOp({ op: 'R', ang: -45 })).toContain('horario');
+    expect(describeOp({ op: 'E', x: 2, y: -2 })).toContain('espeja respecto del eje X');
+    expect(describeOp({ op: 'E', x: 3, y: 3 })).toBe('escala ×3 en ambos ejes');
+  });
+  it.skipIf(!legacyFiles().length)('un paso por nodo interno, hojas primero, y las operaciones de derecha a izquierda', () => {
+    const f = legacyFiles().find((p) => p.endsWith(join('2c2021', 'transformaciones11.json')));
+    const d = importLegacy(JSON.parse(readFileSync(f, 'utf8')));
+    const steps = explainSteps(d);
+    expect(steps).toHaveLength(4);
+    expect(steps.at(-1).esFinal).toBe(true);
+    expect(steps.map((s) => s.numero)).toEqual([1, 2, 3, 4]);
+    // el hijo B del primer contenedor: T(0,-10)*E(2,-2) -> primero E, después T
+    const b = steps[0].hijos[1];
+    expect(b.ops.map((o) => o.formula)).toEqual(['E(2,-2)', 'T(0,-10)']);
+    // el paso final menciona el paso donde se armó el subárbol anterior
+    expect(steps.at(-1).hijos[0].descripcion).toMatch(/armado en el paso \d/);
+  });
+});

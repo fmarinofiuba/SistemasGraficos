@@ -3,27 +3,34 @@
   import { gridPaths, gridTicks } from '../core/grid.js';
   import { staticItems } from '../core/timeline.js';
   import { findNode } from '../core/doc.js';
-  import { describeParams, modelPolygon, polygonBBox } from '../core/primitives.js';
+  import { evaluate } from '../core/evaluate.js';
+  import { apply } from '../core/mat3.js';
   import Shape from './Shape.svelte';
+  import ModelStrip from './ModelStrip.svelte';
 
-  let { doc, showShapes = true, showLegend = true, svg = $bindable(null) } = $props();
+  // frameId: dibuja el subárbol de ese nodo en su propio marco (el nodo en el origen).
+  // markChildren: numera los hijos directos del marco en su origen (1, 2, 3…).
+  // fill: la escena ocupa todo el alto disponible de su contenedor.
+  let { doc, showShapes = true, showLegend = true, frameId = null, markChildren = false, fill = false, svg = $bindable(null) } = $props();
 
   const g = $derived(doc.grilla);
   const pad = 10;
   const side = $derived(g.max - g.min + 2 * pad);
   const paths = $derived(gridPaths(g));
   const ticks = $derived(gridTicks(g));
-  const items = $derived(staticItems(doc));
-  const models = $derived(Object.entries(doc.modelos));
-
-  function legendBox(modelo) {
-    const bb = polygonBBox(modelPolygon(modelo));
-    const s = Math.max(bb.w, bb.h, 20) * 0.7;
-    return `${bb.cx - s} ${-(bb.cy + s)} ${2 * s} ${2 * s}`;
-  }
+  const items = $derived(staticItems(doc, frameId));
+  const markers = $derived.by(() => {
+    if (!markChildren) return [];
+    const ev = evaluate(doc, frameId);
+    const frame = frameId ? findNode(doc, frameId) : doc.raiz;
+    return (frame?.hijos ?? []).map((c, i) => {
+      const [x, y] = apply(ev.get(c.id).world, [0, 0]);
+      return { n: i + 1, x, y };
+    });
+  });
 </script>
 
-<div class="scene">
+<div class="scene" class:fill>
   <svg bind:this={svg} viewBox="{g.min - pad} {-(g.max + pad)} {side} {side}" role="img" aria-label="Escena 2D">
     <rect x={g.min - pad} y={-(g.max + pad)} width={side} height={side} fill="var(--panel)" />
     <g transform="scale(1 -1)">
@@ -43,51 +50,35 @@
         {/each}
       {/if}
       <circle r="1.4" fill="var(--text)" />
+      {#if showShapes}
+        {#each markers as m (m.n)}
+          <g transform="translate({m.x} {m.y})">
+            <circle r="4.2" fill="#fff" stroke="var(--accent)" stroke-width="1.4" vector-effect="non-scaling-stroke" />
+            <text transform="scale(1 -1)" text-anchor="middle" dominant-baseline="central" font-size="5.4" font-weight="700" font-family="system-ui, Arial, sans-serif" fill="var(--accent)">{m.n}</text>
+          </g>
+        {/each}
+      {/if}
     </g>
   </svg>
 
   {#if showLegend}
-    <div class="legend">
-      {#each models as [letra, m] (letra)}
-        <div class="model">
-          <svg viewBox={legendBox(m)} width="60" height="60">
-            <g transform="scale(1 -1)"><Shape modelo={m} {letra} matrix={[1, 0, 0, 1, 0, 0]} /></g>
-          </svg>
-          <div class="name">modelo {letra}</div>
-          <div class="dims">{describeParams(m)}</div>
-        </div>
-      {/each}
-    </div>
+    <div class="legend"><ModelStrip {doc} /></div>
   {/if}
 </div>
 
 <style>
+  .scene.fill {
+    height: 100%;
+  }
   svg {
     width: 100%;
     height: auto;
     display: block;
   }
+  .fill svg {
+    height: 100%;
+  }
   .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 14px;
-    justify-content: center;
     margin-top: 6px;
-  }
-  .model {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    font-size: 12px;
-  }
-  .model svg {
-    width: 60px;
-  }
-  .name {
-    font-weight: 700;
-  }
-  .dims {
-    font-size: 11px;
-    color: var(--muted);
   }
 </style>

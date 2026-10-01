@@ -51,8 +51,24 @@ Tres columnas: **escena** (izquierda), **grafo** (centro) y **panel de opciones*
 - **Validación en vivo**: formas superpuestas o fuera de la grilla se marcan en rojo (indicador arriba a la derecha).
 - **Práctica**: oculta la escena y/o las fórmulas hasta «Revelar».
 - **Imprimir / exportar** (*Archivo ▸ Imprimir*): hoja A4 en tres variantes (enunciado 1: dado el grafo, dibujar la escena;
-  enunciado 2: dada la escena, completar las transformaciones; solución). PDF con el cuadro de impresión del navegador,
-  más SVG y PNG de la escena y del grafo.
+  enunciado 2: dada la escena, completar las transformaciones; solución) y la **resolución paso a paso** (ver abajo).
+  PDF con el cuadro de impresión del navegador, más SVG y PNG de la escena y del grafo.
+
+### Resolución paso a paso (PDF explicado)
+
+En *Archivo ▸ Imprimir ▸ Resolución paso a paso* se arma un documento de varias hojas A4 que ilustra, con imágenes y texto,
+cómo se construye la escena, en el mismo orden que la animación:
+
+- **Hoja 1**: título, la tira de modelos usados (forma, letra y medidas), el grafo completo con los **pasos numerados** en
+  los nodos (de las hojas hacia la raíz) y una explicación de cómo leerlos.
+- **Una hoja por paso** (un paso por cada nodo con hijos; el último es la Raíz = escena final). Cada hoja tiene:
+  un texto que explica qué se arma, la lista de hijos numerados con su fórmula y sus operaciones **de derecha a izquierda**
+  (por ejemplo «`E(2,-2)` escala ×2 en X y ×−2 en Y…», «`T(0,-10)` traslada −10 en Y»), un recorte del grafo con el nodo y sus
+  hijos, y la grilla del paso **a ancho completo**, en el sistema de coordenadas del nodo (el nodo en el origen) y con los hijos
+  marcados con sus números.
+- Los bloques ya armados en pasos anteriores se mencionan como «armado en el paso N».
+
+El texto de cada paso lo genera `src/core/explain.js`.
 
 ## Generar ejercicios automáticamente
 

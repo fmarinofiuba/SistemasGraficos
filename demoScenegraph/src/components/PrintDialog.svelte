@@ -3,6 +3,8 @@
   import { downloadPng, downloadSvg } from '../export.js';
   import GraphStatic from './GraphStatic.svelte';
   import SceneStatic from './SceneStatic.svelte';
+  import ModelStrip from './ModelStrip.svelte';
+  import { explainSteps } from '../core/explain.js';
 
   const VARIANTS = {
     enunciado1: {
@@ -20,6 +22,11 @@
       consigna: 'Solución.',
       grafo: true, hide: false, escena: true,
     },
+    resolucion: {
+      label: 'Resolución paso a paso (explicada, varias hojas)',
+      consigna: '',
+      grafo: true, hide: false, escena: true,
+    },
   };
 
   let variant = $state('enunciado1');
@@ -29,7 +36,13 @@
   let graphSvg = $state(null);
   let busy = $state(false);
 
-  const pages = $derived(conSolucion && variant !== 'solucion' ? [variant, 'solucion'] : [variant]);
+  const pages = $derived(
+    variant === 'resolucion' ? [] : conSolucion && variant !== 'solucion' ? [variant, 'solucion'] : [variant]
+  );
+
+  // Resolución paso a paso: un paso por nodo interno, de las hojas a la raíz
+  const steps = $derived(explainSteps(app.doc));
+  const badges = $derived(new Map(steps.map((st) => [st.nodeId, String(st.numero)])));
   const fileBase = $derived((app.doc.titulo || 'ejercicio').replace(/[^\w\-]+/g, '_'));
 
   // El SVG exportable es el de la última hoja que tiene escena/grafo.
@@ -64,7 +77,7 @@
       {#each Object.entries(VARIANTS) as [k, v]}
         <label class="radio"><input type="radio" name="variant" value={k} bind:group={variant} /> {v.label}</label>
       {/each}
-      <label class="check"><input type="checkbox" bind:checked={conSolucion} disabled={variant === 'solucion'} /> Agregar la solución en otra hoja</label>
+      <label class="check"><input type="checkbox" bind:checked={conSolucion} disabled={variant === 'solucion' || variant === 'resolucion'} /> Agregar la solución en otra hoja</label>
 
       <h3>Título de la hoja</h3>
       <input type="text" bind:value={titulo} />
@@ -84,6 +97,49 @@
     </aside>
 
     <div class="preview">
+      {#if variant === 'resolucion'}
+        <article class="sheet res light-scope">
+          <h1>{titulo}</h1>
+          <p class="consigna">Resolución paso a paso: cómo se arma la escena a partir de los modelos y del grafo.</p>
+          <h2>Modelos utilizados</h2>
+          <ModelStrip doc={app.doc} />
+          <h2>Grafo de escena</h2>
+          <div class="graph"><GraphStatic doc={app.doc} {badges} bind:svg={graphSvg} /></div>
+          <p class="como">
+            Los números en los nodos indican el orden de armado: de las hojas hacia la raíz. En cada paso, el nodo
+            marcado queda en el origen de la grilla y cada uno de sus hijos <b>nace en ese origen</b>; luego se le aplican las
+            operaciones de su arista <b>de derecha a izquierda</b> (la fórmula <code>M = T·R·E</code> se aplica a los
+            vértices como <code>M·v</code>, así que primero actúa la operación de más a la derecha). Cuando todos los
+            hijos están ubicados, el nodo y sus hijos forman un bloque que se usa en el paso siguiente. El último paso
+            es la Raíz: la escena final.
+          </p>
+        </article>
+        {#each steps as st (st.nodeId)}
+          <article class="sheet res light-scope">
+            <h1>Paso {st.numero} de {st.total}<span class="sub">&nbsp;· {st.titulo}</span></h1>
+            <div class="top">
+              <div class="txt">
+                <p>{st.padre}</p>
+                <ol class="kids">
+                  {#each st.hijos as h (h.nodeId)}
+                    <li>
+                      <b>Hijo {h.n}</b> ({h.descripcion}){#if h.ops.length}: <code>M = {h.formula}</code>. Se aplica de derecha a izquierda:
+                        <ol class="ops">
+                          {#each h.ops as o}<li><code>{o.formula}</code> {o.texto}.</li>{/each}
+                        </ol>
+                      {:else}: no tiene transformación, queda en el origen.{/if}
+                    </li>
+                  {/each}
+                </ol>
+              </div>
+              <div class="mini"><GraphStatic doc={app.doc} focus={st.nodeId} levels={1} {badges} /></div>
+            </div>
+            <div class="gridbox">
+              <SceneStatic doc={app.doc} frameId={st.esFinal ? null : st.nodeId} markChildren fill showLegend={false} bind:svg={sceneSvg} />
+            </div>
+          </article>
+        {/each}
+      {/if}
       {#each pages as pv, i (pv + i)}
         {@const v = VARIANTS[pv]}
         <article class="sheet light-scope">
@@ -170,6 +226,65 @@
   h1 {
     font-size: 20px;
     margin: 0;
+  }
+  h2 {
+    font-size: 13px;
+    margin: 6px 0 0;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .sub {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .sheet.res {
+    height: 1123px;
+  }
+  .como {
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 4px 0 0;
+  }
+  .top {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+    align-items: start;
+    flex: none;
+  }
+  .txt {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .txt p {
+    margin: 0 0 6px;
+  }
+  .kids,
+  .ops {
+    margin: 2px 0 0;
+    padding-left: 18px;
+  }
+  .kids > li {
+    margin-bottom: 5px;
+  }
+  .ops {
+    list-style: decimal;
+  }
+  code {
+    font-family: ui-monospace, Consolas, monospace;
+    background: var(--panel-2);
+    padding: 0 3px;
+    border-radius: 3px;
+    font-size: 11.5px;
+  }
+  .mini :global(svg) {
+    max-height: 230px;
+  }
+  .gridbox {
+    flex: 1;
+    min-height: 0;
   }
   .consigna {
     margin: 0 0 4px;

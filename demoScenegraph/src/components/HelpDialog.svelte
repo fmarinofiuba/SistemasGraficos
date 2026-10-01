@@ -124,7 +124,7 @@
             <h4>Practicar y entregar</h4>
             <ul>
               <li><b>Práctica</b>: oculta la escena y/o las fórmulas; «Revelar» muestra el resultado.</li>
-              <li><b>Imprimir</b>: hoja A4 como enunciado 1 (dado el grafo, dibujar la escena), enunciado 2 (dada la escena, completar fórmulas) o solución. También exporta SVG y PNG.</li>
+              <li><b>Imprimir</b>: hoja A4 como enunciado 1, enunciado 2 o solución, o la <b>resolución paso a paso</b>: un PDF explicado con una hoja por paso de construcción. También exporta SVG y PNG.</li>
             </ul>
           </section>
         </div>
