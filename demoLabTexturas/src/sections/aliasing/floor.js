@@ -49,11 +49,39 @@ function grid() {
 	return c;
 }
 
+// Texturas fotográficas: se crean como canvas gris y se rellenan cuando carga la imagen (ver loadTextureImage).
+const photo = () => {
+	const [c, g] = canvas256();
+	g.fillStyle = '#6b7079';
+	g.fillRect(0, 0, TEX_SIZE, TEX_SIZE);
+	return c;
+};
+const mapUrl = (name) => new URL(`../../../maps/${name}`, import.meta.url).href;
+
 export const FLOOR_TEXTURES = [
 	{ value: 'checker', label: 'Checkerboard de alta frecuencia', make: checker },
 	{ value: 'lines', label: 'Líneas periódicas', make: lines },
 	{ value: 'grid', label: 'Cuadriculado fino', make: grid },
+	{ value: 'bricks', label: 'Ladrillos', make: photo, src: mapUrl('ladrillos.jpg') },
+	{ value: 'grass', label: 'Pasto', make: photo, src: mapUrl('pasto.jpg') },
+	{ value: 'stones', label: 'Piedras', make: photo, src: mapUrl('piedras.jpg') },
 ];
+
+// Carga la imagen y la dibuja en el canvas de 256 × 256 (recorte cuadrado centrado, reducido a TEX_SIZE).
+export function loadTextureImage(canvas, url) {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.onload = () => {
+			const side = Math.min(img.naturalWidth, img.naturalHeight);
+			const g = canvas.getContext('2d');
+			g.imageSmoothingQuality = 'high';
+			g.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, TEX_SIZE, TEX_SIZE);
+			resolve();
+		};
+		img.onerror = () => reject(new Error(`No se pudo cargar ${url}`));
+		img.src = url;
+	});
+}
 
 // ---------- cadena de mipmaps (promedio 2×2 en espacio lineal) ----------
 const LIN = new Float32Array(256).map((_, i) => Math.pow(i / 255, 2.2));

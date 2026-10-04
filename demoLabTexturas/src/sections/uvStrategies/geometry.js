@@ -306,6 +306,14 @@ export function buildBoxProjection() {
 	});
 }
 
+// Las texturas glTF se cargan con flipY = false (v medido desde arriba de la imagen), mientras que
+// el panel UV dibuja la imagen con v=1 arriba. Solo para la vista 2D se invierte v; el atributo uv
+// de la malla (usado por el render 3D) queda intacto.
 export function dataFromModelGeometry(geometry) {
-	return geometryData(geometry, { strategy: 'Unwrap diseñado y almacenado en el atributo UV del archivo GLB.' });
+	const data = geometryData(geometry, { strategy: 'Unwrap diseñado y almacenado en el atributo UV del archivo GLB.' });
+	data.uvAt = function (t, k) {
+		const i = (t * 3 + k) * 2;
+		return [this.uv[i], 1 - this.uv[i + 1]];
+	};
+	return data;
 }

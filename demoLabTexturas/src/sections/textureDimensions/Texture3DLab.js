@@ -59,7 +59,7 @@ export class Texture3DLab extends Lab {
 		this.localPoint = null;
 		this.volTex = null;
 		this.matsToUpdate = [];
-		this.geos = { rock: makeDeformedSphere(), teapot: makeTeapot(1.05, 10) };
+		this.geos = { rock: makeDeformedSphere(), teapot: makeTeapot(1.9, 10) };
 
 		this.left = new Scene3DView(layout.left, {
 			position: [3.4, 2.4, 4.4],

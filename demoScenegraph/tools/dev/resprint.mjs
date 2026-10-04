@@ -1,0 +1,16 @@
+import puppeteer from 'puppeteer-core';
+const [,, out, ex = 'ejercicio-11.json'] = process.argv;
+const b = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+const p = await b.newPage();
+await p.setViewport({ width: 1500, height: 1000 });
+await p.goto(`http://localhost:5175/?ex=${ex}&dlg=imprimir`, { waitUntil: 'networkidle0' });
+await p.click('input[value="resolucion"]'); await new Promise(r=>setTimeout(r,300));
+await p.emulateMediaType('print');
+await p.setViewport({ width: 794, height: 1123 });
+await new Promise(r=>setTimeout(r,400));
+const sheets = await p.$$('.sheet');
+console.log('hojas', sheets.length, 'alto por hoja', await p.$$eval('.sheet', a=>a.map(s=>Math.round(s.getBoundingClientRect().height))));
+const pages = [0, 1, sheets.length - 1].filter((v,i,a)=>a.indexOf(v)===i);
+for (const i of pages) await sheets[i].screenshot({ path: `${out}p${i}.png` });
+await p.pdf({ path: `${out}.pdf`, preferCSSPageSize: true, printBackground: true });
+await b.close();
