@@ -4,6 +4,8 @@
 
 Elegí **Agregar** (`A`), el grado y el modo en **Controles**. Independiente consume grupos completos; Encadenado reutiliza el último extremo de la cadena. Un grupo incompleto queda como borrador persistente.
 
+Con **Tipo de curva: Catmull-Rom** cada tramo usa cuatro puntos P0..P3 e interpola de P1 a P2. En modo Encadenado, después de los primeros cuatro puntos **cada clic agrega un tramo** que comparte tres puntos con el anterior. La parametrización α (0 uniforme, 0,5 centrípeta, 1 cordal) y la tensión τ se eligen para la creación y se pueden cambiar por tramo en **Selección** o aplicar a toda la cadena.
+
 Con **Seleccionar** (`V`) podés arrastrar puntos, sumar selección con Shift o encerrar varios con un rectángulo. El inspector admite coordenadas con punto o coma decimal. La rueda hace zoom bajo el puntero; **Desplazar** (`H`) mueve la cámara.
 
 ## Analizar
@@ -11,6 +13,14 @@ Con **Seleccionar** (`V`) podés arrastrar puntos, sumar selección con Shift o 
 El slider inferior controla `u`. **Explorar** (`E`) busca el punto más cercano sin depender de la discretización. Las pestañas muestran funciones base, continuidad y mediciones analíticas. Las capas De Casteljau, vectores, normal, círculo osculador, casco y muestras se activan en **Controles**. `T` es la tangente unitaria de longitud visual fija; `C′` se activa por separado y su flecha escala con el módulo real de la primera derivada.
 
 En **Continuidad**, elegí comparación global `t` o local `u`. Los botones C0/G1/C1/C2 modifican el tramo derecho en una sola transacción reversible. **Dividir aquí** conserva la forma y la parametrización global; **Elevar grado** conserva la curva.
+
+## Catmull-Rom
+
+Cada tramo se dibuja y analiza a través de su cúbica de Bézier exactamente equivalente (capa **Bézier equivalente**). La capa de construcción muestra la pirámide de Barry-Goldman cuando τ=0. **Bases** grafica los pesos efectivos, que suman 1 pero pueden ser negativos.
+
+En **Selección**: **Insertar punto aquí** agrega un punto de interpolación en C(u) y cambia la forma solo localmente. **Extremos duplicados/reflejados** hace que la curva pase por el primer y el último punto. **Cerrar curva** forma un lazo. **h = intervalo nodal** asigna a cada tramo la duración |P2−P1|^α, que da C1 en la comparación global. **Convertir a Bézier** reemplaza el tramo por su equivalente exacto. Borrar un punto regenera los tramos vecinos.
+
+En **Continuidad**, las uniones Catmull-Rom ofrecen **Compartir 3 puntos** e **Igualar α/τ** en lugar de los ajustes de controles; los bloqueos persistentes siguen siendo exclusivos de las cúbicas Bézier.
 
 ## Ilustrar y exportar
 
