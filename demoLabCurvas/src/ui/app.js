@@ -23,7 +23,7 @@ const expectedText = (expected) => {
 
 export class BezierLab {
   constructor(root) {
-    this.root = root; this.store = createStore(this.restoreSession() || initialScene()); this.tool = 'select'; this.activeTab = 'controls'; this.pointer = null; this.playing = false; this.lastFrame = 0; this.autosaveTimer = 0; this.examples = builtInExamples(); this.panelOpen = false;
+    this.root = root; this.store = createStore(this.restoreSession() || initialScene()); this.tool = 'select'; this.activeTab = 'create'; this.pointer = null; this.playing = false; this.lastFrame = 0; this.autosaveTimer = 0; this.examples = builtInExamples(); this.panelOpen = false;
     this.buildShell();
     this.renderer = new SvgSceneRenderer(this.svg, { onPointPointer: (e, id) => this.pointPointer(e, id), onSegmentPointer: (e, id) => this.segmentPointer(e, id) });
   }
@@ -45,7 +45,7 @@ export class BezierLab {
       </header>
       <nav class="leftbar" aria-label="Herramientas"></nav>
       <section class="viewport-wrap"><svg class="viewport" tabindex="0" aria-label="Plano cartesiano interactivo"></svg><div class="welcome">Arrastrá los puntos o cargá un ejemplo <button aria-label="Cerrar mensaje">×</button></div><button class="info-button" aria-label="Abrir panel matemático">i</button><div class="zoom-controls"><button data-zoom="out" aria-label="Alejar">−</button><button data-zoom="in" aria-label="Acercar">+</button></div><aside class="math-panel" aria-label="Panel matemático"><div class="math-head"><strong>Panel matemático</strong><button aria-label="Cerrar panel">×</button></div><div class="math-content"></div></aside></section>
-      <aside class="right-panel"><nav class="panel-tabs" aria-label="Paneles"><button data-tab="controls">Controles</button><button data-tab="bases">Bases</button><button data-tab="continuity">Continuidad</button><button data-tab="measurements">Mediciones</button></nav><div class="panel-body"></div></aside>
+      <aside class="right-panel"><nav class="panel-tabs" aria-label="Paneles"><button data-tab="create">Crear</button><button data-tab="segment">Tramo</button><button data-tab="view">Vista</button><button data-tab="bases">Bases</button><button data-tab="continuity">Continuidad</button><button data-tab="measurements">Mediciones</button></nav><div class="panel-body"></div></aside>
       <footer class="timeline"><select data-role="chain" aria-label="Cadena activa"></select><select class="segment-select" data-role="segment" aria-label="Tramo activo"></select><div class="scope-switch"><button data-scope="local">Local</button><button data-scope="global">Global</button></div><input class="play-slider" data-role="u-range" type="range" min="0" max="1" step="0.001" aria-label="Parámetro u"><input class="u-input" data-role="u-number" type="number" min="0" max="1" step="0.0001" aria-label="Valor de u"><div class="transport"><button data-command="restart" aria-label="Reiniciar">■</button><button data-command="play" aria-label="Reproducir o pausar">▶</button><button data-command="probe" aria-label="Fijar evaluación" title="Fijar evaluación">◆</button></div></footer>
       <div class="statusbar"><span data-status="tool"></span><span data-status="coords">x — · y —</span><span data-status="count"></span><span data-status="autosave">Autosave listo</span></div>
       <input data-role="file" type="file" accept="application/json,.json" hidden>
@@ -85,24 +85,30 @@ export class BezierLab {
   }
 
   renderPanel() {
-    if (!this.scene) return; this.panelBody.replaceChildren();
-    if (this.activeTab === 'controls') this.controlsPanel(); else if (this.activeTab === 'bases') this.basesPanel(); else if (this.activeTab === 'continuity') this.continuityPanel(); else this.measurementsPanel();
+    if (!this.scene) return; this.panelBody.replaceChildren(); this.quickPane?.dispose(); this.quickPane = null; this.root.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.activeTab));
+    if (this.activeTab === 'create') this.createPanel(); else if (this.activeTab === 'segment') this.segmentPanel(); else if (this.activeTab === 'view') this.viewPanel(); else if (this.activeTab === 'bases') this.basesPanel(); else if (this.activeTab === 'continuity') this.continuityPanel(); else this.measurementsPanel();
   }
 
   heading(title, subtitle) { const h = document.createElement('h2'); h.textContent = title; this.panelBody.append(h); if (subtitle) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = subtitle; this.panelBody.append(p); } }
   section(title) { const h = document.createElement('h3'); h.textContent = title; this.panelBody.append(h); }
-  controlGrid(items) { const grid = document.createElement('div'); grid.className = 'control-grid'; for (const item of items) { const label = document.createElement('label'); label.textContent = item.label; const input = item.element || document.createElement(item.type === 'select' ? 'select' : 'input'); const controlId = `control-${Math.random().toString(36).slice(2)}`; input.id = controlId; label.htmlFor = controlId; if (!item.element) { if (item.type === 'select') item.options.forEach(([value, text]) => input.add(new Option(text, value))); else input.type = item.type || 'number'; input.value = item.value; if (item.checked !== undefined) input.checked = item.checked; if (item.min !== undefined) input.min = item.min; if (item.max !== undefined) input.max = item.max; if (item.step !== undefined) input.step = item.step; input.addEventListener(item.event || 'change', () => item.on(input.type === 'checkbox' ? input.checked : input.value)); } grid.append(label, input); } this.panelBody.append(grid); return grid; }
+  controlGrid(items) { const grid = document.createElement('div'); grid.className = 'control-grid'; for (const item of items) { const label = document.createElement('label'); label.textContent = item.label; const input = item.element || (item.type === 'range' ? this.rangeField(item) : document.createElement(item.type === 'select' ? 'select' : 'input')); const controlId = `control-${Math.random().toString(36).slice(2)}`; (input.labelTarget || input).id = controlId; label.htmlFor = controlId; if (!item.element && item.type !== 'range') { if (item.type === 'select') item.options.forEach(([value, text]) => input.add(new Option(text, value))); else input.type = item.type || 'number'; input.value = item.value; if (item.checked !== undefined) input.checked = item.checked; if (item.min !== undefined) input.min = item.min; if (item.max !== undefined) input.max = item.max; if (item.step !== undefined) input.step = item.step; input.addEventListener(item.event || 'change', () => item.on(input.type === 'checkbox' ? input.checked : input.value)); } grid.append(label, input); } this.panelBody.append(grid); return grid; }
+  rangeField(item) {
+    const field = document.createElement('div'); field.className = 'range-field'; const range = document.createElement('input'), number = document.createElement('input'); range.type = 'range'; number.type = 'number';
+    for (const input of [range, number]) Object.assign(input, { min: item.min, max: item.max, step: item.step, value: item.value });
+    range.setAttribute('aria-label', `${item.label} (deslizador)`); range.addEventListener('input', () => { number.value = range.value; }); range.addEventListener('change', () => item.on(range.value)); number.addEventListener('change', () => item.on(number.value));
+    field.append(range, number); field.labelTarget = number; return field;
+  }
   note(text, className = 'muted') { const p = document.createElement(className === 'notice' ? 'div' : 'p'); p.className = className; p.textContent = text; this.panelBody.append(p); }
   crParamControls(alpha, tension, on) {
     const options = ALPHA_PRESETS.map(([value, label]) => [value, label]); if (!ALPHA_PRESETS.some(([value]) => Math.abs(value - alpha) < 1e-9)) options.push([alpha, `Personalizada (α=${alpha})`]);
-    return [{ label: 'Parametrización', type: 'select', value: alpha, options, on: (v) => on('alpha', clamp(parseNumber(v), 0, 1)) }, { label: 'α exacto', value: alpha, min: 0, max: 1, step: .05, on: (v) => { const n = parseNumber(v); if (Number.isFinite(n)) on('alpha', clamp(n, 0, 1)); } }, { label: 'Tensión τ', value: tension, min: -1, max: 1, step: .05, on: (v) => { const n = parseNumber(v); if (Number.isFinite(n)) on('tension', clamp(n, -1, 1)); } }];
+    return [{ label: 'Parametrización', type: 'select', value: alpha, options, on: (v) => on('alpha', clamp(parseNumber(v), 0, 1)) }, { label: 'α exacto', type: 'range', value: alpha, min: 0, max: 1, step: .05, on: (v) => { const n = parseNumber(v); if (Number.isFinite(n)) on('alpha', clamp(n, 0, 1)); } }, { label: 'Tensión τ', type: 'range', value: tension, min: -1, max: 1, step: .05, on: (v) => { const n = parseNumber(v); if (Number.isFinite(n)) on('tension', clamp(n, -1, 1)); } }];
   }
   buttons(items) { const row = document.createElement('div'); row.className = 'button-row'; items.forEach(({ label, action, disabled, title }) => { const b = document.createElement('button'); b.textContent = label; b.disabled = !!disabled; if (title) b.title = title; b.addEventListener('click', action); row.append(b); }); this.panelBody.append(row); }
 
-  controlsPanel() {
-    const s = this.scene.presentation.settings; const segment = selectedSegment(this.scene); const cr = isCatmullRom(segment); const creatingCR = s.creationCurveType === 'catmullRom';
-    this.heading('Controles', segment ? (cr ? `Editando ${segment.name}, Catmull-Rom ${alphaName(segment.params.alpha)} · τ=${segment.params.tension}` : `Editando ${segment.name}, grado ${segment.degree}`) : 'Seleccioná un tramo o agregá puntos.');
-    this.quickPane?.dispose(); const paneHost = document.createElement('div'); this.panelBody.append(paneHost); const quick = { tipo: s.creationCurveType, grado: s.creationDegree, alfa: s.creationAlpha, tension: s.creationTension, modo: s.creationMode, u: this.scene.presentation.playhead.u }; this.quickPane = new Pane({ container: paneHost, title: 'Ajustes rápidos' });
+  createPanel() {
+    const s = this.scene.presentation.settings; const creatingCR = s.creationCurveType === 'catmullRom';
+    this.heading('Crear', 'Valores para los próximos tramos. Para modificar un tramo existente usá la pestaña Tramo.');
+    const paneHost = document.createElement('div'); this.panelBody.append(paneHost); const quick = { tipo: s.creationCurveType, grado: s.creationDegree, alfa: s.creationAlpha, tension: s.creationTension, modo: s.creationMode, u: this.scene.presentation.playhead.u }; this.quickPane = new Pane({ container: paneHost, title: 'Ajustes rápidos' });
     this.quickPane.addBinding(quick, 'tipo', { label: 'Tipo', options: { Bézier: 'bezier', 'Catmull-Rom': 'catmullRom' } }).on('change', (e) => this.setting('creationCurveType', e.value));
     if (creatingCR) {
       this.quickPane.addBinding(quick, 'alfa', { label: 'α', min: 0, max: 1, step: .05 }).on('change', (e) => { if (e.last) this.setting('creationAlpha', clamp(e.value, 0, 1)); });
@@ -118,21 +124,31 @@ export class BezierLab {
       { label: 'Paso de ajuste', value: s.snapStep, min: .000001, step: .05, on: (v) => this.setting('snapStep', Math.max(.000001, parseNumber(v))) },
     ]); if (creatingCR) this.note(s.creationMode === 'chained' ? 'Encadenado: los primeros 4 puntos forman un tramo; desde ahí, cada clic agrega un tramo que comparte 3 puntos con el anterior.' : 'Independiente: cada grupo de 4 puntos P0..P3 forma un tramo que interpola P1→P2.');
     this.buttons([{ label: 'Nueva cadena', action: () => this.newChain() }, { label: 'Descartar borrador', disabled: !this.scene.geometry.drafts.length, action: () => this.discardDraft() }]);
-    if (segment) { this.section('Selección'); const pmap = pointMap(this.scene); const editSegment = (label, fn) => this.store.transact(label, (doc) => { fn(doc.geometry.segments.find((x) => x.id === segment.id)); applyConstraints(doc); });
+  }
+
+  segmentPanel() {
+    const s = this.scene.presentation.settings; const segment = selectedSegment(this.scene); const cr = isCatmullRom(segment);
+    this.heading('Tramo', segment ? (cr ? `Editando ${segment.name}, Catmull-Rom ${alphaName(segment.params.alpha)} · τ=${segment.params.tension}` : `Editando ${segment.name}, grado ${segment.degree}`) : 'Seleccioná un tramo o agregá puntos.');
+    if (segment) { this.section('Parámetros'); const pmap = pointMap(this.scene); const editSegment = (label, fn) => this.store.transact(label, (doc) => { fn(doc.geometry.segments.find((x) => x.id === segment.id)); applyConstraints(doc); });
       this.controlGrid([{ label: 'Nombre', type: 'text', value: segment.name, on: (v) => editSegment('Renombrar tramo', (x) => { x.name = v.slice(0, 120); }) }, { label: 'Duración h', value: segment.duration, min: 1e-6, max: 1e6, step: .1, on: (v) => editSegment('Cambiar duración', (x) => { x.duration = clamp(parseNumber(v), 1e-6, 1e6); }) },
         ...(cr ? this.crParamControls(segment.params.alpha, segment.params.tension, (key, v) => editSegment(key === 'alpha' ? 'Cambiar α' : 'Cambiar tensión', (x) => { x.params[key] = v; })) : []),
         { label: 'Eje de arrastre', type: 'select', value: s.dragAxis, options: [['free', 'Libre'], ['x', 'X'], ['y', 'Y']], on: (v) => this.setting('dragAxis', v) }]);
-      this.buttons([{ label: 'Seleccionar puntos', action: () => this.store.transact('Seleccionar puntos', (doc) => { doc.presentation.selection.pointIds = [...new Set(segment.pointIds)]; }) }, { label: 'Duplicar', action: () => this.duplicateSegment() }]);
+      this.section('Operaciones'); this.buttons([{ label: 'Seleccionar puntos', action: () => this.store.transact('Seleccionar puntos', (doc) => { doc.presentation.selection.pointIds = [...new Set(segment.pointIds)]; }) }, { label: 'Duplicar', action: () => this.duplicateSegment() }]);
       const interior = this.scene.presentation.playhead.u >= 1e-4 && this.scene.presentation.playhead.u <= .9999;
       if (cr) {
         const run = runOfSegment(this.scene, segment.id); const closed = run && isClosedSequence(run.sequence);
         this.buttons([{ label: 'Insertar punto aquí', title: 'Agrega un punto de interpolación en C(u); la forma cambia localmente', disabled: !interior, action: () => this.store.transact('Insertar punto', (doc) => insertCatmullRomPoint(doc)) }, { label: 'Convertir a Bézier', title: 'Reemplaza el tramo por su cúbica de Bézier equivalente (exacta)', action: () => this.store.transact('Convertir a Bézier', (doc) => convertSelectedToBezier(doc)) }, { label: 'Congelar referencia', action: () => this.store.transact('Congelar referencia', (doc) => freezeSelected(doc)) }]);
-        this.buttons([{ label: 'Aplicar α/τ a la cadena', action: () => this.store.transact('Aplicar α/τ a la cadena', (doc) => applyParamsToChain(doc)) }, { label: 'h = intervalo nodal', title: 'Duración de cada tramo = |P2−P1|^α: la parametrización global queda C1', action: () => this.store.transact('Duraciones nodales', (doc) => durationsFromKnots(doc)) }]);
+        this.section('Cadena'); this.buttons([{ label: 'Aplicar α/τ a la cadena', action: () => this.store.transact('Aplicar α/τ a la cadena', (doc) => applyParamsToChain(doc)) }, { label: 'h = intervalo nodal', title: 'Duración de cada tramo = |P2−P1|^α: la parametrización global queda C1', action: () => this.store.transact('Duraciones nodales', (doc) => durationsFromKnots(doc)) }]);
         this.buttons([{ label: 'Extremos duplicados', title: 'Repite P0 y Pn para que la curva los interpole', disabled: closed, action: () => this.store.transact('Extremos duplicados', (doc) => extendEndsSelected(doc, 'duplicate')) }, { label: 'Extremos reflejados', title: 'Agrega 2P0−P1 y 2Pn−Pn−1 como puntos fantasma editables', disabled: closed, action: () => this.store.transact('Extremos reflejados', (doc) => extendEndsSelected(doc, 'reflect')) }, { label: closed ? 'Abrir curva' : 'Cerrar curva', disabled: closed && run.sequence.length - 3 < 4, action: () => this.store.transact(closed ? 'Abrir curva' : 'Cerrar curva', (doc) => toggleClosedSelected(doc)) }]);
       } else this.buttons([{ label: 'Dividir aquí', disabled: !interior, action: () => this.store.transact('Dividir tramo', (doc) => splitSelected(doc)) }, { label: 'Elevar grado', disabled: segment.degree >= 3, action: () => this.store.transact('Elevar grado', (doc) => elevateSelected(doc)) }, { label: 'Congelar referencia', action: () => this.store.transact('Congelar referencia', (doc) => freezeSelected(doc)) }]);
       if (this.scene.presentation.selection.pointIds.length === 1) { const point = pmap.get(this.scene.presentation.selection.pointIds[0]); this.section('Punto seleccionado'); this.controlGrid([{ label: 'x', value: point.x, step: .1, on: (v) => this.editPoint(point.id, 'x', v) }, { label: 'y', value: point.y, step: .1, on: (v) => this.editPoint(point.id, 'y', v) }]); }
     }
-    const hasCR = creatingCR || this.scene.geometry.segments.some(isCatmullRom);
+  }
+
+  viewPanel() {
+    const s = this.scene.presentation.settings; const cr = isCatmullRom(selectedSegment(this.scene));
+    this.heading('Vista', 'Capas visibles, vectores, discretización y estilo.');
+    const hasCR = s.creationCurveType === 'catmullRom' || this.scene.geometry.segments.some(isCatmullRom);
     this.section('Capas'); this.controlGrid([
       ['Curvas', 'curveVisible'], ['Polígonos', 'controlsVisible'], ['Puntos', 'pointsVisible'], ['Rótulos', 'labelsVisible'], ['Cuadrícula', 'gridVisible'], [cr ? 'Construcción Barry-Goldman' : 'De Casteljau', 'casteljauVisible'], ...(hasCR ? [['Bézier equivalente', 'equivalentBezierVisible'], ['Tangentes nodales m', 'knotTangentsVisible']] : []), ['Tangente unitaria T', 'vectorsVisible'], ["Primera derivada C'", 'firstDerivativeVisible'], ['Segunda derivada C\'\'', 'secondDerivativeVisible'], ['Normal principal', 'normalVisible'], ['Círculo osculador', 'osculatingCircleVisible'], ['Casco convexo', 'hullVisible'], ['Muestras', 'samplesVisible'], ['Referencias', 'referencesVisible'], ['Sondas', 'probesVisible']
     ].map(([label, key]) => ({ label, type: 'checkbox', checked: s[key], on: (v) => this.setting(key, v) })));

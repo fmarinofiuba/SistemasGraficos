@@ -39,6 +39,7 @@ class App {
   speed = $state(1);
 
   settings = $state({ paso: '0.1', mostrarLetras: true, tema: 'auto' });
+  panelColapsado = $state(false); // columna 3 (inspector) plegada hacia la derecha
   ghost = $state(null); // { matrix, label } marco de un producto parcial (hover)
   hoverNodeId = $state(null);
   examples = $state([]);

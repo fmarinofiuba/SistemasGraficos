@@ -11,7 +11,16 @@
   const modelKeys = $derived(Object.keys(app.doc.modelos));
 </script>
 
-<aside class="inspector">
+<aside class="inspector" class:colapsado={app.panelColapsado}>
+  <button
+    class="plegar"
+    title={app.panelColapsado ? 'Expandir panel' : 'Colapsar panel'}
+    aria-label={app.panelColapsado ? 'Expandir panel' : 'Colapsar panel'}
+    aria-expanded={!app.panelColapsado}
+    onclick={() => (app.panelColapsado = !app.panelColapsado)}
+  >{app.panelColapsado ? '◀' : '▶'}</button>
+
+  {#if !app.panelColapsado}
   <div role="tablist" class="tabs">
     {#each [['nodo', 'Nodo'], ['modelos', 'Modelos'], ['ajustes', 'Ajustes']] as [k, label]}
       <button role="tab" aria-selected={tab === k} class:on={tab === k} onclick={() => (tab = k)}>{label}</button>
@@ -98,6 +107,7 @@
       </div>
     {/if}
   </div>
+  {/if}
 </aside>
 
 <style>
@@ -107,6 +117,32 @@
     min-height: 0;
     background: var(--panel);
     border-left: 1px solid var(--border);
+    position: relative;
+    min-width: 0;
+  }
+  .plegar {
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    width: 16px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .plegar:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .inspector.colapsado .plegar {
+    left: 50%;
   }
   .tabs {
     display: flex;

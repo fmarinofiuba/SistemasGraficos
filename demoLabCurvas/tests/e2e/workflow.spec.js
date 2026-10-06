@@ -22,7 +22,7 @@ test('flujos docentes, creación, exportación y QA visual', async ({ page }) =>
     const download = page.waitForEvent('download');
     await page.locator('.modal').getByRole('button', { name: 'Exportar' }).click();
     expect((await download).suggestedFilename()).toMatch(/\.svg$/);
-    await page.getByRole('button', { name: 'Controles' }).click();
+    await page.getByRole('button', { name: 'Vista', exact: true }).click();
     await page.getByRole('checkbox', { name: "Primera derivada C'" }).check();
     await expect(page.locator('.first-derivative-vector')).toHaveCount(1);
     await expect(page.locator('.unit-tangent-vector')).toHaveCount(1);
@@ -48,7 +48,7 @@ test('flujos docentes, creación, exportación y QA visual', async ({ page }) =>
   await test.step('Catmull-Rom encadenado, punto compartido y continuidad', async () => {
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByTitle('Nueva escena').click();
-    await page.getByRole('button', { name: 'Controles' }).click();
+    await page.getByRole('button', { name: 'Crear', exact: true }).click();
     await page.getByLabel('Tipo de curva').selectOption('catmullRom');
     await page.getByLabel('Modo', { exact: true }).selectOption('chained');
     await page.getByRole('button', { name: 'Agregar' }).click();
@@ -69,9 +69,10 @@ test('flujos docentes, creación, exportación y QA visual', async ({ page }) =>
     for (const row of await rows.all()) { await expect(row.locator('td').nth(3)).toHaveText('✓'); await expect(row.locator('td').nth(4)).toHaveText('×'); }
     await page.getByRole('button', { name: 'Bases' }).click();
     await expect(page.getByText('Pesos efectivos de Catmull-Rom')).toBeVisible();
-    await page.getByRole('button', { name: 'Controles' }).click();
+    await page.getByRole('button', { name: 'Vista', exact: true }).click();
     await page.getByRole('checkbox', { name: 'Bézier equivalente' }).check();
     await expect(page.locator('.equivalent-control')).toHaveCount(8);
+    await page.getByRole('button', { name: 'Tramo', exact: true }).click();
     await page.getByRole('button', { name: 'Cerrar curva' }).click();
     await expect(page.locator('.catmull-rom-curve')).toHaveCount(7);
     await page.screenshot({ path: 'docs/qa/1280-catmull-rom.png', fullPage: true });
@@ -81,7 +82,7 @@ test('flujos docentes, creación, exportación y QA visual', async ({ page }) =>
     page.once('dialog', (dialog) => dialog.accept());
     await page.getByRole('combobox', { name: 'Ejemplos incorporados' }).selectOption('03-cubica-casteljau');
     await page.getByRole('button', { name: 'Cerrar explicación' }).click();
-    await page.getByRole('button', { name: 'Controles' }).click();
+    await page.getByRole('button', { name: 'Vista', exact: true }).click();
     await page.getByRole('checkbox', { name: 'De Casteljau' }).check();
     await page.screenshot({ path: 'docs/qa/1280-casteljau.png', fullPage: true });
     await page.setViewportSize({ width: 1920, height: 1080 });

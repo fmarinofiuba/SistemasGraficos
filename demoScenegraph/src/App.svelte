@@ -58,7 +58,7 @@
 
 <svelte:window onkeydown={onkey} />
 
-<main>
+<main class:colapsado={app.panelColapsado}>
   <TopBar />
   <SceneView />
   <GraphView />
@@ -78,6 +78,10 @@
     display: grid;
     grid-template-columns: 1fr 1fr 340px;
     grid-template-rows: 46px minmax(0, 1fr) auto;
+    transition: grid-template-columns 0.2s ease;
+  }
+  main.colapsado {
+    grid-template-columns: 1fr 1fr 18px;
   }
   main > :global(.inspector) {
     grid-column: 3;

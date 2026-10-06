@@ -93,5 +93,10 @@
     "archivo": "ejercicio-19.json",
     "titulo": "Ejercicio 19",
     "grupo": "Ejemplos"
+  },
+  {
+    "archivo": "guia-et1.json",
+    "titulo": "Guía - ET1",
+    "grupo": "Guía"
   }
 ]
