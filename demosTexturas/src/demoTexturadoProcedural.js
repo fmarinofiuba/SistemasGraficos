@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 import { VertexNormalsHelper } from 'three/addons/helpers/VertexNormalsHelper.js';
-import { ElevationGeometry } from './ElevationGeometry.js';
+import { ElevationGeometry } from './elevationGeometry.js';
 import { vertexShader, fragmentShader } from './shadersTexturadoProcedural.js';
 import * as dat from 'dat.gui';
 

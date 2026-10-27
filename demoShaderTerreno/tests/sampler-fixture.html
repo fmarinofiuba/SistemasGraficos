@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Prueba mínima del muestreo</title></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { createSurfaceTextures } from '../src/textures.js';
+import { createTerrainMaterial, createTerrainUniforms } from '../src/terrainMaterial.js';
+import { createTerrain, createTerrainWireframe } from '../src/terrain.js';
+import { createTerrainNormalTexture } from '../src/terrainNormals.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(1);
+renderer.setSize(64, 64);
+renderer.shadowMap.enabled = false;
+document.body.append(renderer.domElement);
+let textures, material;
+const extraGeometry = [], extraMaterial = [];
+const geometry = new THREE.PlaneGeometry(48, 48);
+const target = new THREE.WebGLRenderTarget(64, 64);
+try {
+  const assets = createSurfaceTextures(renderer);
+  textures = await assets.ready;
+  const uniforms = createTerrainUniforms(textures);
+  uniforms.uView.value = 4;
+  uniforms.uMacroEnabled.value = 0;
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-24, 24, 24, -24, 1, 200);
+  const mesh = new THREE.Mesh(geometry);
+  scene.add(mesh);
+  let shaderError = '';
+  renderer.debug.onShaderError = (gl, program, vertex, fragment) => {
+    shaderError = gl.getShaderInfoLog(fragment) + '\n' + gl.getShaderInfoLog(vertex);
+  };
+  function selectMaterial(albedo, weights = 'vec4(0,0,1,0)', useMacro = false) {
+    material?.dispose();
+    material = createTerrainMaterial(`
+      vec4 terrainWeights(vec3 p, vec3 n) { return ${weights}; }
+      vec3 terrainAlbedo(vec3 p, vec3 n, vec4 w) { return ${albedo}; }
+      float terrainDetailHeight(vec3 p, vec3 n, vec4 w) { return 0.0; }
+    `, uniforms, { useMacro });
+    mesh.material = material;
+  }
+  function readFrame() {
+    renderer.setRenderTarget(target);
+    renderer.render(scene, camera);
+    if (shaderError) throw new Error(shaderError);
+    const pixels = new Uint8Array(64 * 64 * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, 64, 64, pixels);
+    return pixels;
+  }
+  function sample(offset) {
+    mesh.position.x = offset;
+    camera.position.set(offset, 0, 100);
+    camera.lookAt(offset, 0, 0);
+    return readFrame();
+  }
+  function difference(a, b) {
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) if (i % 4 !== 3) sum += Math.abs(a[i] - b[i]);
+    return sum / (64 * 64 * 3);
+  }
+  selectMaterial('sampleSurface(uRock, p, n, 12.0).rgb');
+  const direct = sample(0);
+  const periodicDifference = difference(direct, sample(12));
+  selectMaterial('sampleVaried(uRock, p, n, 12.0).rgb');
+  const stochastic = sample(0);
+  const translatedDifferences = [12, 24, 36].map((offset) => difference(stochastic, sample(offset)));
+  const continuityDifference = difference(stochastic, sample(0.001));
+  const terrain = createTerrain(8), alternate = terrain.clone();
+  extraGeometry.push(terrain, alternate);
+  const indices = [];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+    const a = y * 9 + x, b = a + 9, c = b + 1, d = a + 1;
+    indices.push(a, b, c, a, c, d);
+  }
+  alternate.setIndex(indices);
+  textures.terrainNormals = createTerrainNormalTexture(terrain);
+  alternate.setAttribute('normal', terrain.attributes.normal.clone());
+  uniforms.uTerrainNormalMap.value = textures.terrainNormals;
+  uniforms.uTerrainNormalSize.value.set(9, 9);
+  uniforms.uTerrainNormalsEnabled.value = 1;
+  uniforms.uView.value = 5;
+  mesh.position.set(0, 0, 0);
+  mesh.geometry = terrain;
+  Object.assign(camera, { left: -600, right: 600, top: 600, bottom: -600, far: 4000 });
+  camera.updateProjectionMatrix();
+  camera.up.set(0, 0, -1);
+  camera.position.set(0, 2000, 0);
+  camera.lookAt(0, 0, 0);
+  const normalsA = readFrame();
+  mesh.geometry = alternate;
+  const normalDiagonalDifference = difference(normalsA, readFrame());
+  uniforms.uTerrainNormalsEnabled.value = 0;
+  mesh.geometry = terrain;
+  const vertexNormalsA = readFrame();
+  mesh.geometry = alternate;
+  const vertexNormalDiagonalDifference = difference(vertexNormalsA, readFrame());
+  uniforms.uTerrainNormalsEnabled.value = 1;
+
+  const overlay = createTerrainWireframe(mesh);
+  extraMaterial.push(overlay.material);
+  overlay.visible = true;
+  const wireframeDifference = difference(normalsA, readFrame());
+  overlay.visible = false;
+
+  selectMaterial('vec3(0.30)', 'vec4(0,0,1,0)', true);
+  uniforms.uView.value = 4;
+  uniforms.uMacroEnabled.value = 0;
+  const noMacro = readFrame();
+  uniforms.uMacroEnabled.value = 1;
+  const withMacro = readFrame();
+  const macroColorDifference = difference(noMacro, withMacro);
+  let minimumHue = Infinity, maximumHue = -Infinity;
+  for (let i = 0; i < withMacro.length; i += 4) {
+    const hue = withMacro[i] - withMacro[i + 2];
+    minimumHue = Math.min(minimumHue, hue); maximumHue = Math.max(maximumHue, hue);
+  }
+  const macroHueRange = maximumHue - minimumHue;
+
+  selectMaterial('terrainSnowColor(p)', 'vec4(0,0,0,1)');
+  uniforms.uTerrainNormalsEnabled.value = 0;
+  mesh.geometry = geometry;
+  Object.assign(camera, { left: -4, right: 4, top: 4, bottom: -4, far: 200 });
+  camera.updateProjectionMatrix();
+  camera.up.set(0, 1, 0);
+  camera.position.set(0, 0, 100); camera.lookAt(0, 0, 0);
+  uniforms.uSnowDetail.value = 0;
+  const noSnowDetail = readFrame();
+  uniforms.uSnowDetail.value = 1;
+  const snowDetailDifference = difference(noSnowDetail, readFrame());
+
+  window.samplerResult = { periodicDifference, translatedDifferences, continuityDifference,
+    normalDiagonalDifference, vertexNormalDiagonalDifference, wireframeDifference, macroColorDifference, macroHueRange,
+    snowDetailDifference, glError: renderer.getContext().getError() };
+} catch (error) {
+  window.samplerResult = { error: error.message };
+} finally {
+  material?.dispose();
+  geometry.dispose(); target.dispose();
+  for (const geometry of extraGeometry) geometry.dispose();
+  for (const material of extraMaterial) material.dispose();
+  if (textures) for (const texture of Object.values(textures)) texture.dispose();
+  renderer.dispose();
+}
+</script></body></html>

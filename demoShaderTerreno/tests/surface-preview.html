@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Revisión estática del terreno</title><style>html,body{margin:0}#preview{width:256px;height:192px}</style></head><body><div id="preview"></div>
+<script type="module">
+import { TerrainScene } from '../src/scene.js';
+import { PRESETS } from '../src/presets.js';
+import { createControls } from '../src/controls.js';
+
+let lab;
+try {
+  lab = new TerrainScene(document.querySelector('#preview'));
+  // Sin animación: solo tres dibujos explícitos y sombras limitadas a 512².
+  lab.renderer.setAnimationLoop(null);
+  lab.renderer.setPixelRatio(1);
+  lab.renderer.setSize(256, 192);
+  lab.sun.shadow.mapSize.set(512, 512);
+  lab.renderer.shadowMap.needsUpdate = true;
+  await lab.ready;
+  const compiled = lab.compile(PRESETS[4].source);
+  if (!compiled.ok) throw new Error(compiled.error);
+  const capture = () => {
+    lab.invalidate(); lab.render(0);
+    return lab.renderer.domElement.toDataURL('image/png');
+  };
+  const overall = capture();
+  const pixels = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 192;
+    const context = canvas.getContext('2d');
+    context.drawImage(lab.renderer.domElement, 0, 0);
+    return context.getImageData(0, 0, 256, 192).data;
+  };
+  const difference = (a, b) => a.reduce((sum, value, i) => sum + Math.abs(value - b[i]), 0) / a.length;
+  const withShadows = pixels();
+  lab.setShadows(false);
+  capture();
+  const withoutShadows = pixels();
+  lab.setShadows(true);
+  capture();
+  const shadowDifference = difference(withShadows, withoutShadows);
+  const shadowRestoreDifference = difference(withShadows, pixels());
+  lab.closeCamera();
+  const detail = capture();
+  lab.setWireframe(true);
+  const wireframe = capture();
+  lab.setWireframe(false);
+  const positions = lab.terrain.geometry.attributes.position;
+  const normals = lab.terrain.geometry.attributes.normal;
+  let snowy = -1;
+  for (let i = 0; i < positions.count; i++) {
+    if (normals.getY(i) > 0.9 && positions.getY(i) > 230
+      && (snowy < 0 || positions.getY(i) > positions.getY(snowy))) snowy = i;
+  }
+  if (snowy >= 0) {
+    const x = positions.getX(snowy), y = positions.getY(snowy), z = positions.getZ(snowy);
+    lab.controls.target.set(x, y, z);
+    lab.camera.position.set(x + 65, y + 65, z + 80);
+    lab.controls.update();
+  }
+  const snow = capture();
+  const panel = document.createElement('div');
+  document.body.append(panel);
+  const menu = createControls(panel, lab, { inspect() {}, compare() {} });
+  const orbitalPosition = lab.camera.position.clone();
+  const selector = menu.bindings.cameraMode.element.querySelector('select');
+  selector.selectedIndex = 1;
+  selector.dispatchEvent(new Event('change', { bubbles: true }));
+  const droneSelected = lab.cameraMode === 'drone' && !lab.controls.enabled && lab.camera === lab.drone.camera;
+  const drone = capture();
+  const droneStart = lab.camera.position.clone();
+  lab.drone.update(1, true);
+  const droneMoved = lab.camera.position.distanceTo(droneStart);
+  selector.selectedIndex = 0;
+  selector.dispatchEvent(new Event('change', { bubbles: true }));
+  const orbitalRestored = lab.cameraMode === 'orbital' && lab.controls.enabled
+    && lab.camera.position.distanceTo(orbitalPosition) < 1e-6;
+  menu.dispose(); panel.remove();
+  window.surfacePreview = { overall, detail, wireframe, snow, drone, shadowDifference, shadowRestoreDifference,
+    droneSelected, droneMoved, orbitalRestored };
+} catch (error) {
+  window.surfacePreview = { error: error.message };
+} finally {
+  lab?.dispose();
+}
+</script></body></html>
